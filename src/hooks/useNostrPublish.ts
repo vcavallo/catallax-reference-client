@@ -1,13 +1,15 @@
 import { useNostr } from "@nostrify/react";
-import { useMutation, type UseMutationResult } from "@tanstack/react-query";
+import { useMutation, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 
 import { useCurrentUser } from "./useCurrentUser";
+import { CATALLAX_KINDS } from "@/lib/catallax";
 
 import type { NostrEvent } from "@nostrify/nostrify";
 
 export function useNostrPublish(): UseMutationResult<NostrEvent> {
   const { nostr } = useNostr();
   const { user } = useCurrentUser();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (t: Omit<NostrEvent, 'id' | 'pubkey' | 'sig'>) => {
@@ -37,6 +39,27 @@ export function useNostrPublish(): UseMutationResult<NostrEvent> {
     },
     onSuccess: (data) => {
       console.log("Event published successfully:", data);
+
+      // Invalidate relevant queries based on event kind
+      if (data.kind === CATALLAX_KINDS.TASK_PROPOSAL) {
+        console.log('Invalidating task-related queries after publishing task proposal');
+        // Invalidate all task-related queries with more aggressive patterns
+        queryClient.invalidateQueries({ queryKey: ['catallax'] });
+        // Also try to refetch immediately
+        queryClient.refetchQueries({ queryKey: ['catallax', 'tasks'] });
+        queryClient.refetchQueries({ queryKey: ['catallax', 'my-tasks'] });
+        queryClient.refetchQueries({ queryKey: ['catallax', 'worker-tasks'] });
+        queryClient.refetchQueries({ queryKey: ['catallax', 'arbiter-tasks'] });
+      } else if (data.kind === CATALLAX_KINDS.ARBITER_ANNOUNCEMENT) {
+        console.log('Invalidating arbiter-related queries after publishing arbiter announcement');
+        // Invalidate arbiter-related queries
+        queryClient.invalidateQueries({ queryKey: ['catallax', 'arbiters'] });
+        queryClient.invalidateQueries({ queryKey: ['catallax', 'my-services'] });
+      } else if (data.kind === CATALLAX_KINDS.TASK_CONCLUSION) {
+        console.log('Invalidating conclusion-related queries after publishing task conclusion');
+        // Invalidate conclusion-related queries
+        queryClient.invalidateQueries({ queryKey: ['catallax', 'conclusions'] });
+      }
     },
   });
 }

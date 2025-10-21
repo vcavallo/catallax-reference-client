@@ -1,0 +1,16 @@
+{
+  "name": "Catallax",
+  "short_name": "Catallax",
+  "description": "Decentralized contract work with escrow arbitration on Nostr",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}
