@@ -69,12 +69,12 @@ export function ArbiterCard({ arbiter, onSelect, showSelectButton }: ArbiterCard
           <div className="flex justify-between items-center">
             <span className="text-muted-foreground flex items-center gap-1">
               <TrendingUp className="h-3 w-3" />
-              Grape Rank:
+              GrapeRank Confidence:
             </span>
             {grapeRank.isLoading ? (
               <Skeleton className="h-4 w-8" />
             ) : grapeRank.data?.rank !== null && grapeRank.data?.rank !== undefined ? (
-              <span className="font-medium">#{grapeRank.data.rank}</span>
+              <span className="font-medium">{grapeRank.data.rank}%</span>
             ) : (
               <span className="text-muted-foreground text-xs">N/A</span>
             )}
