@@ -119,9 +119,9 @@ function SortedArbiterList({
       const aRank = sortData.get(a.id);
       const bRank = sortData.get(b.id);
 
-      // If both have ranks, sort by rank (lower is better)
+      // If both have ranks, sort by rank (higher is better)
       if (aRank !== null && aRank !== undefined && bRank !== null && bRank !== undefined) {
-        return aRank - bRank;
+        return bRank - aRank;
       }
       // Ranked arbiters come before unranked
       if (aRank !== null && aRank !== undefined && (bRank === null || bRank === undefined)) {
