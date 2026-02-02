@@ -363,6 +363,25 @@ export function useTasksForWorker(pubkey?: string) {
   });
 }
 
+/**
+ * Returns a map of arbiter pubkey -> number of completed tasks (successful or rejected resolutions)
+ */
+export function useArbiterExperience() {
+  const { data: conclusions = [] } = useTaskConclusions();
+
+  const experienceMap = new Map<string, number>();
+
+  conclusions.forEach(conclusion => {
+    // Only count successful or rejected as "completed" experience
+    if (conclusion.arbiterPubkey && ['successful', 'rejected'].includes(conclusion.resolution)) {
+      const current = experienceMap.get(conclusion.arbiterPubkey) || 0;
+      experienceMap.set(conclusion.arbiterPubkey, current + 1);
+    }
+  });
+
+  return experienceMap;
+}
+
 export function useTasksForArbiter(pubkey?: string) {
   const { nostr } = useNostr();
 
