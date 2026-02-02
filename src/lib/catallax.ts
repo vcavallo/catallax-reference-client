@@ -205,10 +205,10 @@ export function formatSats(sats: string | number): string {
 
 export function formatFee(feeType: FeeType, feeAmount: string): string {
   if (feeType === 'flat') {
-    return formatSats(feeAmount);
+    return `${formatSats(feeAmount)} fee`;
   }
   const percentage = parseFloat(feeAmount) * 100;
-  return `${percentage}%`;
+  return `${percentage}% fee`;
 }
 
 export function generateTaskId(title: string): string {

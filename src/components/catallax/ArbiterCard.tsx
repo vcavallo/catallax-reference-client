@@ -5,7 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ExternalLink, Shield, Users, TrendingUp } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { ExternalLink, Shield, Users, TrendingUp, Info } from 'lucide-react';
 import { genUserName } from '@/lib/genUserName';
 import { formatFee, type ArbiterAnnouncement } from '@/lib/catallax';
 import { CopyNpubButton } from '@/components/CopyNpubButton';
@@ -67,14 +68,24 @@ export function ArbiterCard({ arbiter, onSelect, showSelectButton }: ArbiterCard
         {/* GrapeRank Information */}
         <div className="space-y-2 text-sm">
           <div className="flex justify-between items-center">
-            <span className="text-muted-foreground flex items-center gap-1">
-              <TrendingUp className="h-3 w-3" />
-              Grape Rank:
-            </span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-muted-foreground flex items-center gap-1 cursor-help">
+                    <TrendingUp className="h-3 w-3" />
+                    GrapeRank Confidence:
+                    <Info className="h-3 w-3" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="max-w-xs">The selected Point of View can say with this degree of confidence that this is not a bot nor scammer</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             {grapeRank.isLoading ? (
               <Skeleton className="h-4 w-8" />
             ) : grapeRank.data?.rank !== null && grapeRank.data?.rank !== undefined ? (
-              <span className="font-medium">#{grapeRank.data.rank}</span>
+              <span className="font-medium">{grapeRank.data.rank}%</span>
             ) : (
               <span className="text-muted-foreground text-xs">N/A</span>
             )}
