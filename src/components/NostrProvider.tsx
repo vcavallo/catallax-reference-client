@@ -3,6 +3,7 @@ import { NostrEvent, NPool, NRelay1 } from '@nostrify/nostrify';
 import { NostrContext } from '@nostrify/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppContext } from '@/hooks/useAppContext';
+import { RelayMode } from '@/contexts/AppContext';
 
 interface NostrProviderProps {
   children: React.ReactNode;
@@ -18,13 +19,37 @@ const NostrProvider: React.FC<NostrProviderProps> = (props) => {
   const pool = useRef<NPool | undefined>(undefined);
 
   // Use refs so the pool always has the latest data
-  const relayUrl = useRef<string>(config.relayUrl);
+  const relayModeRef = useRef<RelayMode>(config.relayMode ?? 'default');
+  const customRelayRef = useRef<string | undefined>(config.customRelay);
+  const userRelaysRef = useRef<string[] | undefined>(config.userRelays);
+  const presetRelaysRef = useRef(presetRelays);
 
   // Update refs when config changes
   useEffect(() => {
-    relayUrl.current = config.relayUrl;
+    relayModeRef.current = config.relayMode ?? 'default';
+    customRelayRef.current = config.customRelay;
+    userRelaysRef.current = config.userRelays;
+    presetRelaysRef.current = presetRelays;
     queryClient.resetQueries();
-  }, [config.relayUrl, queryClient]);
+  }, [config.relayMode, config.customRelay, config.userRelays, presetRelays, queryClient]);
+
+  // Helper function to get the active relay list based on mode
+  const getActiveRelays = (): string[] => {
+    const mode = relayModeRef.current;
+
+    if (mode === 'custom' && customRelayRef.current) {
+      // Custom mode: only use the single custom relay
+      return [customRelayRef.current];
+    }
+
+    if (mode === 'user' && userRelaysRef.current && userRelaysRef.current.length > 0) {
+      // User mode: use all user's NIP-65 relays
+      return userRelaysRef.current;
+    }
+
+    // Default mode: use all preset relays
+    return (presetRelaysRef.current ?? []).map(({ url }) => url);
+  };
 
   // Initialize NPool only once
   if (!pool.current) {
@@ -33,22 +58,11 @@ const NostrProvider: React.FC<NostrProviderProps> = (props) => {
         return new NRelay1(url);
       },
       reqRouter(filters) {
-        return new Map([[relayUrl.current, filters]]);
+        const relays = getActiveRelays();
+        return new Map(relays.map(url => [url, filters]));
       },
       eventRouter(_event: NostrEvent) {
-        // Publish to the selected relay
-        const allRelays = new Set<string>([relayUrl.current]);
-
-        // Also publish to the preset relays, capped to 5
-        for (const { url } of (presetRelays ?? [])) {
-          allRelays.add(url);
-
-          if (allRelays.size >= 5) {
-            break;
-          }
-        }
-
-        return [...allRelays];
+        return getActiveRelays();
       },
     });
   }

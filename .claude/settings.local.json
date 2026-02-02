@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__nostr__read_nip",
+      "Bash(find:*)",
+      "mcp__nostr__read_protocol",
+      "Bash(npm test:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "nostr"
+  ]
+}
