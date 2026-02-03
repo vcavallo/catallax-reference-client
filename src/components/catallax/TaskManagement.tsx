@@ -152,6 +152,14 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
       }
     });
 
+    // Preserve NIP-75 crowdfunding fields across status transitions
+    if (task.fundingType === 'crowdfunding') {
+      tags.push(['funding_type', 'crowdfunding']);
+      if (task.goalId) {
+        tags.push(['goal', task.goalId]);
+      }
+    }
+
     console.log('Publishing task update with tags:', tags);
 
     createEvent({
@@ -223,6 +231,14 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
         tags.push(['t', category]);
       }
     });
+
+    // Preserve NIP-75 crowdfunding fields across status transitions
+    if (task.fundingType === 'crowdfunding') {
+      tags.push(['funding_type', 'crowdfunding']);
+      if (task.goalId) {
+        tags.push(['goal', task.goalId]);
+      }
+    }
 
     console.log('Publishing task update without worker, tags:', tags);
 
