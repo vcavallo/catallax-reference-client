@@ -495,6 +495,7 @@ export function TaskDetail() {
         {/* Task Management */}
         <TaskManagement
           task={task}
+          realZapsEnabled={true}
           onUpdate={() => {
             // Invalidate and refetch the task detail query
             invalidateAllCatallaxQueries();

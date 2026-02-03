@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { Zap } from 'lucide-react';
-import { formatSats, type TaskProposal } from '@/lib/catallax';
+import { type TaskProposal } from '@/lib/catallax';
 import { ZapDialog } from './ZapDialog';
 import { LightningPaymentDialog } from './LightningPaymentDialog';
 import { CATALLAX_KINDS } from '@/lib/catallax';

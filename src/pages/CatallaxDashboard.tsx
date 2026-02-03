@@ -366,6 +366,7 @@ export default function CatallaxDashboard() {
                           variant="outline"
                           onClick={() => setTaskFilters({
                             status: 'all',
+                            fundingType: 'all',
                             sortField: 'date',
                             sortDirection: 'desc',
                             selectedTags: [],

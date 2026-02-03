@@ -98,7 +98,7 @@ export function useZapGoal(goalId: string | undefined) {
         : ['wss://relay.primal.net', 'wss://nos.lol', 'wss://relay.damus.io'];
 
       // Query for zap receipts using direct WebSocket (bypasses NPool issues)
-      let receipts = await queryRelaysDirect(
+      const receipts = await queryRelaysDirect(
         relaysToQuery,
         { kinds: [9735], '#e': [goalId], limit: 500 }
       );
