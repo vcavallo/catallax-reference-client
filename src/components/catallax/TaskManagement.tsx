@@ -14,12 +14,16 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Zap, DollarSign, RefreshCw, Bug, AlertTriangle } from 'lucide-react';
-import { CATALLAX_KINDS, formatSats, getStatusColor, calculatePaymentSplit, calculateArbiterFee, parseArbiterAnnouncement, type TaskProposal, type TaskStatus, type ArbiterAnnouncement } from '@/lib/catallax';
+import { Zap, Bitcoin, RefreshCw, Bug, AlertTriangle } from 'lucide-react';
+import { CATALLAX_KINDS, formatSats, getStatusColor, calculatePaymentSplit, calculateCrowdfundingRefunds, calculateArbiterFee, parseArbiterAnnouncement, type TaskProposal, type TaskStatus, type ArbiterAnnouncement, type PaymentSplit } from '@/lib/catallax';
 import { TaskConclusionForm } from './TaskConclusionForm';
 import { ZapDialog } from './ZapDialog';
 import { ZapSplitDialog } from './ZapSplitDialog';
 import { LightningPaymentDialog } from './LightningPaymentDialog';
+import { LightningSplitPaymentDialog } from './LightningSplitPaymentDialog';
+import { GoalProgressBar } from './GoalProgressBar';
+import { ContributorsList } from './ContributorsList';
+import { useZapGoal } from '@/hooks/useZapGoal';
 
 interface TaskManagementProps {
   task: TaskProposal;
@@ -72,6 +76,9 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
   });
 
 
+  // Fetch crowdfunding goal data if applicable
+  const { data: goalData } = useZapGoal(task.fundingType === 'crowdfunding' ? task.goalId : undefined);
+
   const [workerPubkey, setWorkerPubkey] = useState('');
   const [showConclusionForm, setShowConclusionForm] = useState(false);
   const [showDebugConclusionForm, setShowDebugConclusionForm] = useState(false);
@@ -95,6 +102,33 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
   const isPatron = user.pubkey === task.patronPubkey;
   const isArbiter = user.pubkey === task.arbiterPubkey;
   const isWorker = user.pubkey === task.workerPubkey;
+
+  // Calculate refund splits - different logic for crowdfunded vs regular tasks
+  const refundSplits: PaymentSplit[] = (() => {
+    if (!arbiterAnnouncement) return [];
+
+    // For crowdfunded tasks, refund goes to all contributors proportionally
+    if (task.fundingType === 'crowdfunding' && goalData?.progress.contributors.length) {
+      const contributors = goalData.progress.contributors;
+      const refunds = calculateCrowdfundingRefunds(
+        contributors,
+        arbiterAnnouncement,
+        parseInt(task.amount),
+        'cancelled' // Use 'cancelled' to skip arbiter fee for now
+      );
+
+      // Convert RefundSplit[] to PaymentSplit[]
+      return refunds.map(refund => ({
+        recipientPubkey: refund.recipientPubkey,
+        amount: refund.amountSats,
+        weight: refund.amountSats, // Weight proportional to refund amount
+        purpose: `Refund for task: ${task.content.title}`,
+      }));
+    }
+
+    // For regular tasks, refund goes to patron only
+    return calculatePaymentSplit(task, arbiterAnnouncement, task.patronPubkey, 'patron');
+  })();
 
   if (!isPatron && !isArbiter && !isWorker) {
     return (
@@ -146,6 +180,14 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
       }
     });
 
+    // Preserve NIP-75 crowdfunding fields across status transitions
+    if (task.fundingType === 'crowdfunding') {
+      tags.push(['funding_type', 'crowdfunding']);
+      if (task.goalId) {
+        tags.push(['goal', task.goalId]);
+      }
+    }
+
     console.log('Publishing task update with tags:', tags);
 
     createEvent({
@@ -158,10 +200,16 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
         console.log('Task update published successfully:', event);
         setWorkerPubkey('');
 
-        toast({
-          title: 'Worker Assigned!',
-          description: `Worker has been assigned and task status updated to "in progress".`,
-        });
+        // Show appropriate toast based on the status update
+        const toastMessages: Record<TaskStatus, { title: string; description: string }> = {
+          proposed: { title: 'Task Updated', description: 'Task status updated to "proposed".' },
+          funded: { title: 'Task Funded!', description: 'Task has been marked as funded.' },
+          in_progress: { title: 'Worker Assigned!', description: 'Worker has been assigned and task status updated to "in progress".' },
+          submitted: { title: 'Work Submitted', description: 'Task status updated to "submitted".' },
+          concluded: { title: 'Task Concluded', description: 'Task has been concluded.' },
+        };
+        const message = toastMessages[newStatus] || { title: 'Task Updated', description: `Task status updated to "${newStatus}".` };
+        toast(message);
 
         // Force immediate refetch of all task queries
         invalidateAllCatallaxQueries();
@@ -217,6 +265,14 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
         tags.push(['t', category]);
       }
     });
+
+    // Preserve NIP-75 crowdfunding fields across status transitions
+    if (task.fundingType === 'crowdfunding') {
+      tags.push(['funding_type', 'crowdfunding']);
+      if (task.goalId) {
+        tags.push(['goal', task.goalId]);
+      }
+    }
 
     console.log('Publishing task update without worker, tags:', tags);
 
@@ -421,7 +477,34 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
           <div className="space-y-4">
             <h4 className="font-medium">Patron Actions</h4>
 
-            {task.status === 'proposed' && task.arbiterPubkey && (
+            {/* Crowdfunding progress section */}
+            {task.fundingType === 'crowdfunding' && task.goalId && task.status === 'proposed' && (
+              <div className="space-y-3">
+                <Alert>
+                  <Zap className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Crowdfunding:</strong> This task is being funded by multiple contributors via a NIP-75 Zap Goal.
+                    {goalData?.progress.isGoalMet
+                      ? ' The goal has been reached! You can now mark this task as funded.'
+                      : ' Share the task to attract more contributors.'}
+                  </AlertDescription>
+                </Alert>
+                <GoalProgressBar goalId={task.goalId} />
+                <ContributorsList goalId={task.goalId} />
+                {goalData?.progress.isGoalMet && (
+                  <Button
+                    onClick={() => updateTaskStatus('funded')}
+                    disabled={isPending}
+                    className="w-full"
+                  >
+                    <Zap className="h-4 w-4 mr-2" />
+                    Mark as Funded (Goal Reached)
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {task.status === 'proposed' && task.arbiterPubkey && task.fundingType !== 'crowdfunding' && (
               <div className="space-y-3">
                 <Alert>
                   <Zap className="h-4 w-4" />
@@ -486,7 +569,7 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
             {(task.status === 'funded' || task.status === 'in_progress' || task.status === 'submitted' || task.zapReceiptId) && (
               <div className="space-y-3">
                 <Alert>
-                  <DollarSign className="h-4 w-4" />
+                  <Bitcoin className="h-4 w-4" />
                   <AlertDescription>
                     <strong>Assign Worker:</strong> Enter the public key of the worker who will complete this task.
                     {task.status === 'funded' && ' This will update the task status to "in progress".'}
@@ -517,8 +600,8 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
                   )}
                 </div>
 
-                {/* Add/Update Zap Receipt - Show if no zap receipt is linked */}
-                {!task.zapReceiptId && (
+                {/* Add/Update Zap Receipt - Show if no zap receipt is linked (not needed for crowdfunded tasks) */}
+                {!task.zapReceiptId && task.fundingType !== 'crowdfunding' && (
                   <div className="pt-2 border-t border-dashed border-orange-200">
                     <Alert className="border-orange-200 bg-orange-50">
                       <Bug className="h-4 w-4 text-orange-600" />
@@ -617,11 +700,11 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
             <h4 className="font-medium">Arbiter Actions</h4>
 
             <Alert>
-              <DollarSign className="h-4 w-4" />
+              <Bitcoin className="h-4 w-4" />
               <AlertDescription>
                 As the arbiter, you can either pay the worker (if work is satisfactory)
-                or refund the patron (if work is unsatisfactory or task is cancelled).
-                {arbiterAnnouncement && (
+                or refund {task.fundingType === 'crowdfunding' ? 'the contributors' : 'the patron'} (if work is unsatisfactory or task is cancelled).
+                {arbiterAnnouncement && task.fundingType !== 'crowdfunding' && (
                   <>
                     <br /><br />
                     <strong>Fee Structure:</strong> Your {arbiterAnnouncement.feeType === 'flat' ? 'flat' : 'percentage'} fee of{' '}
@@ -629,6 +712,12 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
                       ? formatSats(arbiterAnnouncement.feeAmount)
                       : `${(parseFloat(arbiterAnnouncement.feeAmount) * 100).toFixed(1)}%`
                     } will be paid in addition to the task amount.
+                  </>
+                )}
+                {task.fundingType === 'crowdfunding' && (
+                  <>
+                    <br /><br />
+                    <strong>Crowdfunded Task:</strong> Refunds will be distributed proportionally to all contributors.
                   </>
                 )}
               </AlertDescription>
@@ -658,10 +747,15 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
                 className="w-full"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Refund Patron
-                {arbiterAnnouncement && (
+                {task.fundingType === 'crowdfunding' ? 'Refund Contributors' : 'Refund Patron'}
+                {arbiterAnnouncement && task.fundingType !== 'crowdfunding' && (
                   <span className="ml-1 text-xs opacity-75">
                     ({formatSats(parseInt(task.amount) + calculateArbiterFee(parseInt(task.amount), arbiterAnnouncement.feeType, arbiterAnnouncement.feeAmount))})
+                  </span>
+                )}
+                {task.fundingType === 'crowdfunding' && goalData && (
+                  <span className="ml-1 text-xs opacity-75">
+                    ({formatSats(goalData.progress.raisedSats)})
                   </span>
                 )}
               </Button>
@@ -737,25 +831,45 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
 
       {/* Zap Split Dialogs */}
       {task.workerPubkey && arbiterAnnouncement && (
-        <ZapSplitDialog
-          open={showPayoutSplitDialog}
-          onOpenChange={setShowPayoutSplitDialog}
-          splits={calculatePaymentSplit(task, arbiterAnnouncement, task.workerPubkey, 'worker')}
-          purpose={`Payment for completed work: ${task.content.title}`}
-          onZapComplete={handlePayWorker}
-          realZapsEnabled={realZapsEnabled}
-        />
+        realZapsEnabled ? (
+          <LightningSplitPaymentDialog
+            open={showPayoutSplitDialog}
+            onOpenChange={setShowPayoutSplitDialog}
+            splits={calculatePaymentSplit(task, arbiterAnnouncement, task.workerPubkey, 'worker')}
+            purpose={`Payment for completed work: ${task.content.title}`}
+            onPaymentComplete={handlePayWorker}
+          />
+        ) : (
+          <ZapSplitDialog
+            open={showPayoutSplitDialog}
+            onOpenChange={setShowPayoutSplitDialog}
+            splits={calculatePaymentSplit(task, arbiterAnnouncement, task.workerPubkey, 'worker')}
+            purpose={`Payment for completed work: ${task.content.title}`}
+            onZapComplete={handlePayWorker}
+            realZapsEnabled={realZapsEnabled}
+          />
+        )
       )}
 
-      {arbiterAnnouncement && (
-        <ZapSplitDialog
-          open={showRefundSplitDialog}
-          onOpenChange={setShowRefundSplitDialog}
-          splits={calculatePaymentSplit(task, arbiterAnnouncement, task.patronPubkey, 'patron')}
-          purpose={`Refund for task: ${task.content.title}`}
-          onZapComplete={handleRefundPatron}
-          realZapsEnabled={realZapsEnabled}
-        />
+      {arbiterAnnouncement && refundSplits.length > 0 && (
+        realZapsEnabled ? (
+          <LightningSplitPaymentDialog
+            open={showRefundSplitDialog}
+            onOpenChange={setShowRefundSplitDialog}
+            splits={refundSplits}
+            purpose={`Refund for task: ${task.content.title}`}
+            onPaymentComplete={handleRefundPatron}
+          />
+        ) : (
+          <ZapSplitDialog
+            open={showRefundSplitDialog}
+            onOpenChange={setShowRefundSplitDialog}
+            splits={refundSplits}
+            purpose={`Refund for task: ${task.content.title}`}
+            onZapComplete={handleRefundPatron}
+            realZapsEnabled={realZapsEnabled}
+          />
+        )
       )}
 
       {/* Payment Dialogs */}

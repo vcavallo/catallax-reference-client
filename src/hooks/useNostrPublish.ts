@@ -59,6 +59,9 @@ export function useNostrPublish(): UseMutationResult<NostrEvent> {
         console.log('Invalidating conclusion-related queries after publishing task conclusion');
         // Invalidate conclusion-related queries
         queryClient.invalidateQueries({ queryKey: ['catallax', 'conclusions'] });
+      } else if (data.kind === 9041) {
+        console.log('Invalidating zap-goal queries after publishing goal event');
+        queryClient.invalidateQueries({ queryKey: ['zap-goal'] });
       }
     },
   });

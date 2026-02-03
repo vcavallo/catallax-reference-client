@@ -70,6 +70,7 @@ export default function CatallaxDashboard() {
   // Task filter state
   const [taskFilters, setTaskFilters] = useState<TaskFilterState>({
     status: 'all',
+    fundingType: 'all',
     sortField: 'date',
     sortDirection: 'desc',
     selectedTags: [],
@@ -365,6 +366,7 @@ export default function CatallaxDashboard() {
                           variant="outline"
                           onClick={() => setTaskFilters({
                             status: 'all',
+                            fundingType: 'all',
                             sortField: 'date',
                             sortDirection: 'desc',
                             selectedTags: [],

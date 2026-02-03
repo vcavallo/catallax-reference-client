@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { getLightningAddressFromMetadata } from '@/hooks/useRealZap';
 import { useAuthor } from '@/hooks/useAuthor';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -29,6 +30,8 @@ interface LightningPaymentDialogProps {
   onPaymentError?: (error: string) => void;
   /** Addressable event reference (a tag) for the task being funded, e.g. "33401:pubkey:d-tag" */
   eventReference?: string;
+  /** Goal event ID (e tag) for NIP-75 zap goal tracking */
+  goalId?: string;
 }
 
 export function LightningPaymentDialog({
@@ -40,10 +43,12 @@ export function LightningPaymentDialog({
   onPaymentComplete,
   onPaymentError,
   eventReference,
+  goalId,
 }: LightningPaymentDialogProps) {
   const { user } = useCurrentUser();
   const { nostr } = useNostr();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const author = useAuthor(recipientPubkey);
   const metadata = author.data?.metadata;
 
@@ -128,12 +133,33 @@ export function LightningPaymentDialog({
         throw new Error(`Amount must be between ${lnurlData.minSendable / 1000} and ${lnurlData.maxSendable / 1000} sats`);
       }
 
+      // Get relays from the goal event if we have a goalId (NIP-75 requirement)
+      let zapRelays = ['wss://relay.primal.net', 'wss://nos.lol', 'wss://relay.damus.io'];
+      if (goalId) {
+        try {
+          const goalEvents = await nostr.query([{ ids: [goalId], kinds: [9041] }], { signal: AbortSignal.timeout(5000) });
+          if (goalEvents.length > 0) {
+            const goalRelaysTag = goalEvents[0].tags.find(([name]) => name === 'relays');
+            if (goalRelaysTag && goalRelaysTag.length > 1) {
+              zapRelays = goalRelaysTag.slice(1);
+            }
+          }
+        } catch {
+          // Use default relays if goal fetch fails
+        }
+      }
+
       // Create zap request event (NIP-57)
       const zapRequestTags: string[][] = [
         ['p', recipientPubkey],
         ['amount', amountMsat.toString()],
-        ['relays', 'wss://relay.nostr.band', 'wss://nos.lol'],
+        ['relays', ...zapRelays],
       ];
+
+      // Add goal event ID for NIP-75 zap receipt tracking (required for progress queries)
+      if (goalId) {
+        zapRequestTags.push(['e', goalId]);
+      }
 
       // Add event reference if provided (links zap to a specific task/event)
       if (eventReference) {
@@ -304,6 +330,21 @@ export function LightningPaymentDialog({
 
     // Trigger the task status update
     onPaymentComplete(zapReceiptId);
+
+    // Invalidate the zap goal query so the progress bar updates
+    if (goalId) {
+      // Invalidate immediately for any cached data
+      queryClient.invalidateQueries({ queryKey: ['zap-goal', goalId] });
+
+      // Also invalidate after delays to catch receipt propagation to relays
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['zap-goal', goalId] });
+      }, 3000);
+
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['zap-goal', goalId] });
+      }, 8000);
+    }
 
     // Auto-close after success
     setTimeout(() => {

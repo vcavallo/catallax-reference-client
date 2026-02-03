@@ -11,13 +11,14 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import type { TaskProposal, TaskStatus } from '@/lib/catallax';
+import type { TaskProposal, TaskStatus, FundingType } from '@/lib/catallax';
 
 export type TaskSortField = 'date' | 'value';
 export type SortDirection = 'asc' | 'desc';
 
 export interface TaskFilterState {
   status: TaskStatus | 'all';
+  fundingType: FundingType | 'all';
   sortField: TaskSortField;
   sortDirection: SortDirection;
   selectedTags: string[];
@@ -89,6 +90,21 @@ export function TaskFilters({ tasks, filters, onFiltersChange, userFollows, isLo
                 {option.label}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+
+        {/* Funding type filter */}
+        <Select
+          value={filters.fundingType}
+          onValueChange={(value) => onFiltersChange({ ...filters, fundingType: value as FundingType | 'all' })}
+        >
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Funding" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Funding</SelectItem>
+            <SelectItem value="single">Single Patron</SelectItem>
+            <SelectItem value="crowdfunding">Crowdfunded</SelectItem>
           </SelectContent>
         </Select>
 
@@ -178,6 +194,11 @@ export function applyTaskFilters(
   // Filter by status
   if (filters.status !== 'all') {
     filtered = filtered.filter(task => task.status === filters.status);
+  }
+
+  // Filter by funding type
+  if (filters.fundingType !== 'all') {
+    filtered = filtered.filter(task => task.fundingType === filters.fundingType);
   }
 
   // Filter by tags

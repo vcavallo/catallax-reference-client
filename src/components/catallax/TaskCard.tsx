@@ -13,6 +13,8 @@ import { genUserName } from '@/lib/genUserName';
 import { formatSats, getStatusColor, type TaskProposal, CATALLAX_KINDS } from '@/lib/catallax';
 import { ZapDialog } from './ZapDialog';
 import { LightningPaymentDialog } from './LightningPaymentDialog';
+import { GoalProgressBar } from './GoalProgressBar';
+import { CrowdfundButton } from './CrowdfundButton';
 import { CopyNpubButton } from '@/components/CopyNpubButton';
 import { format } from 'date-fns';
 
@@ -31,6 +33,7 @@ export function TaskCard({ task, onApply, onManage, onFund, showApplyButton, sho
   const { user } = useCurrentUser();
   const { toast } = useToast();
   const [showFundDialog, setShowFundDialog] = useState(false);
+  const [waitingForPayment, setWaitingForPayment] = useState(false);
   const patronAuthor = useAuthor(task.patronPubkey);
   const arbiterAuthor = useAuthor(task.arbiterPubkey || '');
   const workerAuthor = useAuthor(task.workerPubkey || '');
@@ -108,9 +111,16 @@ export function TaskCard({ task, onApply, onManage, onFund, showApplyButton, sho
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <Badge className={getStatusColor(task.status)}>
-              {task.status.replace('_', ' ')}
-            </Badge>
+            <div className="flex items-center gap-1">
+              {task.fundingType === 'crowdfunding' && (
+                <Badge variant="secondary" className="text-xs">
+                  👥 Crowdfunded
+                </Badge>
+              )}
+              <Badge className={getStatusColor(task.status)}>
+                {task.status.replace('_', ' ')}
+              </Badge>
+            </div>
             <Badge variant="outline" className="font-mono">
               {formatSats(task.amount)}
             </Badge>
@@ -167,6 +177,16 @@ export function TaskCard({ task, onApply, onManage, onFund, showApplyButton, sho
           )}
         </div>
 
+        {/* Crowdfunding progress */}
+        {task.fundingType === 'crowdfunding' && task.goalId && (
+          <GoalProgressBar
+            goalId={task.goalId}
+            className="pt-2"
+            waitingForPayment={waitingForPayment}
+            onWaitingComplete={() => setWaitingForPayment(false)}
+          />
+        )}
+
         <div className="flex gap-2 pt-2">
           <Button variant="outline" size="sm" asChild>
             <Link to={`/task/${taskNaddr}`}>
@@ -190,11 +210,20 @@ export function TaskCard({ task, onApply, onManage, onFund, showApplyButton, sho
             </Button>
           )}
 
-          {showFundButton && onFund && task.status === 'proposed' && task.arbiterPubkey && user && (
+          {showFundButton && onFund && task.status === 'proposed' && task.arbiterPubkey && user && task.fundingType !== 'crowdfunding' && (
             <Button size="sm" onClick={() => setShowFundDialog(true)} className="ml-auto">
               <Zap className="h-4 w-4 mr-1" />
               Fund
             </Button>
+          )}
+
+          {task.fundingType === 'crowdfunding' && task.status === 'proposed' && (
+            <CrowdfundButton
+              task={task}
+              realZapsEnabled={realZapsEnabled}
+              className="ml-auto"
+              onPaymentComplete={() => setWaitingForPayment(true)}
+            />
           )}
 
           {showManageButton && onManage && (

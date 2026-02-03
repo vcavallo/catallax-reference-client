@@ -11,6 +11,7 @@ export const CATALLAX_KINDS = {
 export type TaskStatus = 'proposed' | 'funded' | 'in_progress' | 'submitted' | 'concluded';
 export type ResolutionType = 'successful' | 'rejected' | 'cancelled' | 'abandoned';
 export type FeeType = 'flat' | 'percentage';
+export type FundingType = 'single' | 'crowdfunding';
 
 // Content Interfaces
 export interface ArbiterAnnouncementContent {
@@ -62,6 +63,33 @@ export interface TaskProposal {
   status: TaskStatus;
   zapReceiptId?: string;
   detailsUrl?: string;
+  fundingType: FundingType;
+  goalId?: string;
+}
+
+// NIP-75 Zap Goal Types
+export interface GoalContributor {
+  pubkey: string;
+  zapReceiptId: string;
+  amountSats: number;
+  percentage: number;
+  timestamp: number;
+}
+
+export interface GoalProgress {
+  goalId: string;
+  targetSats: number;
+  raisedSats: number;
+  percentComplete: number;
+  isGoalMet: boolean;
+  contributors: GoalContributor[];
+}
+
+export interface RefundSplit {
+  recipientPubkey: string;
+  amountSats: number;
+  originalContribution: number;
+  proportion: number;
 }
 
 export interface TaskConclusion {
@@ -132,6 +160,11 @@ export function parseTaskProposal(event: NostrEvent): TaskProposal | null {
     const zapReceiptId = event.tags.find(([name, , , marker]) => name === 'e' && marker === 'zap')?.[1];
     const detailsUrl = event.tags.find(([name]) => name === 'r')?.[1];
 
+    // NIP-75 crowdfunding fields
+    const fundingType = (event.tags.find(([name]) => name === 'funding_type')?.[1] as FundingType) || 'single';
+    const goalTag = event.tags.find(([name]) => name === 'goal');
+    const goalId = goalTag?.[1];
+
     if (!d || !patronPubkey || !amount || !status) {
       return null;
     }
@@ -151,6 +184,8 @@ export function parseTaskProposal(event: NostrEvent): TaskProposal | null {
       status,
       zapReceiptId,
       detailsUrl,
+      fundingType,
+      goalId,
     };
   } catch {
     return null;
@@ -270,6 +305,143 @@ export function calculateArbiterFee(taskAmount: number, feeType: FeeType, feeAmo
     const percentage = parseFloat(feeAmount);
     return Math.floor(taskAmount * percentage);
   }
+}
+
+// NIP-75 Zap Goal Utilities
+
+export function buildGoalEventTags(
+  task: { title: string; description: string; amount: string; d: string },
+  patronPubkey: string,
+  arbiterPubkey: string,
+  relays: string[],
+): string[][] {
+  const targetMsats = (parseInt(task.amount) * 1000).toString();
+
+  return [
+    ['relays', ...relays],
+    ['amount', targetMsats],
+    ['summary', task.description.slice(0, 200)],
+    ['a', `33401:${patronPubkey}:${task.d}`, relays[0] || ''],
+    ['zap', arbiterPubkey, relays[0] || '', '1'],
+    ['alt', `Crowdfunding goal for Catallax task: ${task.title}`],
+  ];
+}
+
+export function parseZapReceiptAmount(receipt: NostrEvent): number {
+  // Per NIP-57, the amount is in the zap request inside the description tag
+  const descTag = receipt.tags.find(([name]) => name === 'description');
+  if (descTag?.[1]) {
+    try {
+      const zapRequest = JSON.parse(descTag[1]) as NostrEvent;
+      const amountTag = zapRequest.tags.find(([name]) => name === 'amount');
+      if (amountTag?.[1]) {
+        return parseInt(amountTag[1]);
+      }
+    } catch {
+      // Fall through to return 0
+    }
+  }
+  return 0;
+}
+
+export function parseZapReceiptSender(receipt: NostrEvent): string | null {
+  // The zap receipt contains the original zap request in the 'description' tag
+  const descTag = receipt.tags.find(([name]) => name === 'description');
+  if (!descTag?.[1]) return null;
+
+  try {
+    const zapRequest = JSON.parse(descTag[1]) as NostrEvent;
+    return zapRequest.pubkey;
+  } catch {
+    return null;
+  }
+}
+
+export function calculateGoalProgress(
+  goal: NostrEvent,
+  receipts: NostrEvent[],
+): GoalProgress {
+  // Parse target from goal
+  const amountTag = goal.tags.find(([name]) => name === 'amount');
+  const targetMsats = parseInt(amountTag?.[1] || '0');
+  const targetSats = Math.floor(targetMsats / 1000);
+
+  // Parse contributors from receipts
+  const contributors: GoalContributor[] = [];
+  let totalRaisedMsats = 0;
+
+  for (const receipt of receipts) {
+    const amountMsats = parseZapReceiptAmount(receipt);
+    if (amountMsats <= 0) continue;
+
+    const senderPubkey = parseZapReceiptSender(receipt);
+    if (!senderPubkey) continue;
+
+    totalRaisedMsats += amountMsats;
+
+    // Aggregate multiple zaps from the same sender
+    const existing = contributors.find((c) => c.pubkey === senderPubkey);
+    if (existing) {
+      existing.amountSats += Math.floor(amountMsats / 1000);
+    } else {
+      contributors.push({
+        pubkey: senderPubkey,
+        zapReceiptId: receipt.id,
+        amountSats: Math.floor(amountMsats / 1000),
+        percentage: 0,
+        timestamp: receipt.created_at,
+      });
+    }
+  }
+
+  const raisedSats = Math.floor(totalRaisedMsats / 1000);
+
+  // Calculate percentages
+  for (const contributor of contributors) {
+    contributor.percentage = raisedSats > 0 ? contributor.amountSats / raisedSats : 0;
+  }
+
+  // Sort by amount descending
+  contributors.sort((a, b) => b.amountSats - a.amountSats);
+
+  return {
+    goalId: goal.id,
+    targetSats,
+    raisedSats,
+    percentComplete: targetSats > 0 ? Math.min((raisedSats / targetSats) * 100, 100) : 0,
+    isGoalMet: raisedSats >= targetSats,
+    contributors,
+  };
+}
+
+export function calculateCrowdfundingRefunds(
+  contributors: GoalContributor[],
+  arbiter: ArbiterAnnouncement,
+  taskAmount: number,
+  refundType: 'rejected' | 'cancelled',
+): RefundSplit[] {
+  const totalRaised = contributors.reduce((sum, c) => sum + c.amountSats, 0);
+
+  // For cancellation: full refunds, no arbiter fee
+  // For rejection: arbiter keeps their fee
+  const arbiterFee =
+    refundType === 'cancelled'
+      ? 0
+      : calculateArbiterFee(taskAmount, arbiter.feeType, arbiter.feeAmount);
+
+  const refundPool = totalRaised - arbiterFee;
+
+  return contributors.map((c) => {
+    const proportion = c.amountSats / totalRaised;
+    const refundAmount = Math.floor(refundPool * proportion);
+
+    return {
+      recipientPubkey: c.pubkey,
+      amountSats: refundAmount,
+      originalContribution: c.amountSats,
+      proportion,
+    };
+  });
 }
 
 export function calculatePaymentSplit(

@@ -39,6 +39,7 @@ describe('TaskDetail Meta Description Generation', () => {
       amount: '50000',
       categories: ['test'],
       status: 'proposed',
+      fundingType: 'single',
     };
 
     const result = generateMetaDescription(mockTask);
@@ -62,6 +63,7 @@ describe('TaskDetail Meta Description Generation', () => {
       amount: '100000',
       categories: ['test'],
       status: 'proposed',
+      fundingType: 'single',
     };
 
     const result = generateMetaDescription(mockTask);
@@ -85,6 +87,7 @@ describe('TaskDetail Meta Description Generation', () => {
       amount: '100000000', // 1 BTC
       categories: ['test'],
       status: 'proposed',
+      fundingType: 'single',
     };
 
     const result = generateMetaDescription(mockTask);
@@ -106,6 +109,7 @@ describe('TaskDetail Meta Description Generation', () => {
       amount: '25000',
       categories: ['test'],
       status: 'proposed',
+      fundingType: 'single',
     };
 
     const result = generateMetaDescription(mockTask);
