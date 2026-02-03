@@ -328,11 +328,47 @@ export function buildGoalEventTags(
 }
 
 export function parseZapReceiptAmount(receipt: NostrEvent): number {
-  // Try amount tag first (NIP-57)
+  // Try amount tag on the receipt first (some implementations include it)
   const amountTag = receipt.tags.find(([name]) => name === 'amount');
   if (amountTag?.[1]) {
     return parseInt(amountTag[1]);
   }
+
+  // NIP-57: the amount is in the embedded zap request inside the 'description' tag
+  const descTag = receipt.tags.find(([name]) => name === 'description');
+  if (descTag?.[1]) {
+    try {
+      const zapRequest = JSON.parse(descTag[1]) as NostrEvent;
+      const zapAmountTag = zapRequest.tags?.find(([name]: string[]) => name === 'amount');
+      if (zapAmountTag?.[1]) {
+        return parseInt(zapAmountTag[1]);
+      }
+    } catch {
+      // Fall through to bolt11 parsing
+    }
+  }
+
+  // Last resort: parse amount from bolt11 invoice
+  const bolt11Tag = receipt.tags.find(([name]) => name === 'bolt11');
+  if (bolt11Tag?.[1]) {
+    const bolt11 = bolt11Tag[1].toLowerCase();
+    // BOLT11 amount: lnbc<amount><multiplier> where multipliers are m=milli, u=micro, n=nano, p=pico
+    const match = bolt11.match(/^lnbc(\d+)([munp]?)/);
+    if (match) {
+      const value = parseInt(match[1]);
+      const multiplier = match[2];
+      let msats: number;
+      switch (multiplier) {
+        case 'm': msats = value * 100000000; break;  // milli-BTC to msats
+        case 'u': msats = value * 100000; break;      // micro-BTC to msats
+        case 'n': msats = value * 100; break;          // nano-BTC to msats
+        case 'p': msats = value / 10; break;           // pico-BTC to msats
+        default: msats = value * 100000000000; break;  // BTC to msats
+      }
+      return msats;
+    }
+  }
+
   return 0;
 }
 
