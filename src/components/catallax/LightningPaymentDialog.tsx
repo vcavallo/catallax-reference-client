@@ -131,11 +131,27 @@ export function LightningPaymentDialog({
         throw new Error(`Amount must be between ${lnurlData.minSendable / 1000} and ${lnurlData.maxSendable / 1000} sats`);
       }
 
+      // Get relays from the goal event if we have a goalId (NIP-75 requirement)
+      let zapRelays = ['wss://relay.primal.net', 'wss://nos.lol', 'wss://relay.damus.io'];
+      if (goalId) {
+        try {
+          const goalEvents = await nostr.query([{ ids: [goalId], kinds: [9041] }], { signal: AbortSignal.timeout(5000) });
+          if (goalEvents.length > 0) {
+            const goalRelaysTag = goalEvents[0].tags.find(([name]) => name === 'relays');
+            if (goalRelaysTag && goalRelaysTag.length > 1) {
+              zapRelays = goalRelaysTag.slice(1);
+            }
+          }
+        } catch {
+          // Use default relays if goal fetch fails
+        }
+      }
+
       // Create zap request event (NIP-57)
       const zapRequestTags: string[][] = [
         ['p', recipientPubkey],
         ['amount', amountMsat.toString()],
-        ['relays', 'wss://relay.nostr.band', 'wss://nos.lol'],
+        ['relays', ...zapRelays],
       ];
 
       // Add goal event ID for NIP-75 zap receipt tracking (required for progress queries)
