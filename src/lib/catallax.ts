@@ -328,10 +328,18 @@ export function buildGoalEventTags(
 }
 
 export function parseZapReceiptAmount(receipt: NostrEvent): number {
-  // Try amount tag first (NIP-57)
-  const amountTag = receipt.tags.find(([name]) => name === 'amount');
-  if (amountTag?.[1]) {
-    return parseInt(amountTag[1]);
+  // Per NIP-57, the amount is in the zap request inside the description tag
+  const descTag = receipt.tags.find(([name]) => name === 'description');
+  if (descTag?.[1]) {
+    try {
+      const zapRequest = JSON.parse(descTag[1]) as NostrEvent;
+      const amountTag = zapRequest.tags.find(([name]) => name === 'amount');
+      if (amountTag?.[1]) {
+        return parseInt(amountTag[1]);
+      }
+    } catch {
+      // Fall through to return 0
+    }
   }
   return 0;
 }

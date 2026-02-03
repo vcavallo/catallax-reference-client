@@ -9,6 +9,70 @@ interface ZapGoalData {
   progress: GoalProgress;
 }
 
+// Direct WebSocket query to specific relays - bypasses NPool issues
+async function queryRelaysDirect(
+  relays: string[],
+  filter: { kinds: number[]; '#e'?: string[]; '#a'?: string[]; limit?: number },
+  timeoutMs: number = 8000
+): Promise<NostrEvent[]> {
+  const allEvents: NostrEvent[] = [];
+  const seenIds = new Set<string>();
+
+  const promises = relays.map(relayUrl =>
+    new Promise<NostrEvent[]>((resolve) => {
+      const events: NostrEvent[] = [];
+      try {
+        const ws = new WebSocket(relayUrl);
+        const subId = 'zap-' + Math.random().toString(36).slice(2);
+
+        const timeout = setTimeout(() => {
+          ws.close();
+          resolve(events);
+        }, timeoutMs);
+
+        ws.onopen = () => {
+          ws.send(JSON.stringify(['REQ', subId, filter]));
+        };
+
+        ws.onmessage = (msg) => {
+          try {
+            const data = JSON.parse(msg.data);
+            if (data[0] === 'EVENT' && data[1] === subId) {
+              events.push(data[2] as NostrEvent);
+            } else if (data[0] === 'EOSE') {
+              clearTimeout(timeout);
+              ws.close();
+              resolve(events);
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        };
+
+        ws.onerror = () => {
+          clearTimeout(timeout);
+          ws.close();
+          resolve(events);
+        };
+      } catch {
+        resolve(events);
+      }
+    })
+  );
+
+  const results = await Promise.all(promises);
+  for (const events of results) {
+    for (const event of events) {
+      if (!seenIds.has(event.id)) {
+        seenIds.add(event.id);
+        allEvents.push(event);
+      }
+    }
+  }
+
+  return allEvents;
+}
+
 export function useZapGoal(goalId: string | undefined) {
   const { nostr } = useNostr();
 
@@ -24,27 +88,36 @@ export function useZapGoal(goalId: string | undefined) {
       const goal = goals[0];
       if (!goal) return null;
 
-      // Extract the goal's linked event reference (e tag) if any
-      const linkedEventId = goal.tags.find(([name]) => name === 'e')?.[1];
       // Extract the goal's linked addressable event (a tag) if any
       const linkedAddress = goal.tags.find(([name]) => name === 'a')?.[1];
 
-      // Query for zap receipts that reference the goal directly
-      const queries: Parameters<typeof nostr.query>[0] = [
-        { kinds: [9735], '#e': [goalId], limit: 500 },
-      ];
+      // Get relays from the goal event, fallback to common relays
+      const goalRelays = goal.tags.find(([name]) => name === 'relays')?.slice(1) || [];
+      const relaysToQuery = goalRelays.length > 0
+        ? goalRelays
+        : ['wss://relay.primal.net', 'wss://nos.lol', 'wss://relay.damus.io'];
 
-      // Also query for receipts referencing the linked event (task event ID)
-      if (linkedEventId) {
-        queries.push({ kinds: [9735], '#e': [linkedEventId], limit: 500 });
-      }
+      // Query for zap receipts using direct WebSocket (bypasses NPool issues)
+      let receipts = await queryRelaysDirect(
+        relaysToQuery,
+        { kinds: [9735], '#e': [goalId], limit: 500 }
+      );
 
-      // Also query for receipts referencing the linked addressable event (task naddr)
+      // Also query by #a tag if we have a linked address
       if (linkedAddress) {
-        queries.push({ kinds: [9735], '#a': [linkedAddress], limit: 500 });
-      }
+        const aReceipts = await queryRelaysDirect(
+          relaysToQuery,
+          { kinds: [9735], '#a': [linkedAddress], limit: 500 }
+        );
 
-      const receipts = await nostr.query(queries, { signal });
+        // Merge and dedupe
+        const seenIds = new Set(receipts.map(r => r.id));
+        for (const r of aReceipts) {
+          if (!seenIds.has(r.id)) {
+            receipts.push(r);
+          }
+        }
+      }
 
       // Deduplicate receipts by event ID
       const seen = new Set<string>();
@@ -54,10 +127,12 @@ export function useZapGoal(goalId: string | undefined) {
         return true;
       });
 
+      const progress = calculateGoalProgress(goal, uniqueReceipts);
+
       return {
         goal,
         receipts: uniqueReceipts,
-        progress: calculateGoalProgress(goal, uniqueReceipts),
+        progress,
       };
     },
     enabled: !!goalId,
