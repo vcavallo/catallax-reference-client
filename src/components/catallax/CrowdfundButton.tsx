@@ -42,6 +42,7 @@ export function CrowdfundButton({ task, realZapsEnabled = false, className }: Cr
           purpose={`Crowdfunding contribution for: ${task.content.title}`}
           onPaymentComplete={() => setShowZapDialog(false)}
           eventReference={`${CATALLAX_KINDS.TASK_PROPOSAL}:${task.patronPubkey}:${task.d}`}
+          goalId={task.goalId}
         />
       ) : (
         <ZapDialog
