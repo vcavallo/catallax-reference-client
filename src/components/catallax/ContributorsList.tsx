@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useGoalContributors } from '@/hooks/useGoalContributors';
+import { useZapGoal } from '@/hooks/useZapGoal';
 import { useAuthor } from '@/hooks/useAuthor';
 import { formatSats, type GoalContributor, type RefundSplit } from '@/lib/catallax';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -26,7 +26,8 @@ export function ContributorsList({
   showRefunds = false,
   className,
 }: ContributorsListProps) {
-  const { contributors, isLoading } = useGoalContributors(goalId);
+  const { data, isLoading } = useZapGoal(goalId);
+  const contributors = data?.progress.contributors ?? [];
   const [isOpen, setIsOpen] = useState(false);
 
   if (isLoading) {

@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Zap, DollarSign, RefreshCw, Bug, AlertTriangle } from 'lucide-react';
-import { CATALLAX_KINDS, formatSats, getStatusColor, calculatePaymentSplit, calculateArbiterFee, parseArbiterAnnouncement, type TaskProposal, type TaskStatus, type ArbiterAnnouncement } from '@/lib/catallax';
+import { CATALLAX_KINDS, formatSats, getStatusColor, calculatePaymentSplit, calculateArbiterFee, parseArbiterAnnouncement, buildTaskTags, type TaskProposal, type TaskStatus, type ArbiterAnnouncement } from '@/lib/catallax';
 import { TaskConclusionForm } from './TaskConclusionForm';
 import { ZapDialog } from './ZapDialog';
 import { ZapSplitDialog } from './ZapSplitDialog';
@@ -114,73 +114,34 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
     );
   }
 
-  const updateTaskStatus = (newStatus: TaskStatus, zapReceiptId?: string, workerPubkeyOverride?: string) => {
-    const content = task.content;
-
-    const tags: string[][] = [
-      ['d', task.d],
-      ['p', task.patronPubkey],
-      ['amount', task.amount],
-      ['t', 'catallax'],
-      ['status', newStatus],
-    ];
-
-    if (task.arbiterPubkey) {
-      tags.push(['p', task.arbiterPubkey]);
-    }
-
-    if (workerPubkeyOverride || task.workerPubkey) {
-      tags.push(['p', workerPubkeyOverride || task.workerPubkey || '']);
-    }
-
-    if (task.arbiterService) {
-      tags.push(['a', task.arbiterService]);
-    }
-
-    if (task.detailsUrl) {
-      tags.push(['r', task.detailsUrl]);
-    }
-
-    if (task.zapReceiptId || zapReceiptId) {
-      tags.push(['e', task.zapReceiptId || zapReceiptId || '', '', 'zap']);
-    }
-
-    // Add task categories
-    task.categories.forEach(category => {
-      if (category !== 'catallax') {
-        tags.push(['t', category]);
-      }
+  const publishTaskUpdate = (
+    newStatus: TaskStatus,
+    opts: { workerPubkey?: string | null; zapReceiptId?: string | null; successTitle: string; successDescription: string },
+  ) => {
+    const tags = buildTaskTags(task, newStatus, {
+      workerPubkey: opts.workerPubkey,
+      zapReceiptId: opts.zapReceiptId,
     });
-
-    // Preserve NIP-75 crowdfunding fields across status transitions
-    if (task.fundingType === 'crowdfunding') {
-      tags.push(['funding_type', 'crowdfunding']);
-      if (task.goalId) {
-        tags.push(['goal', task.goalId]);
-      }
-    }
 
     console.log('Publishing task update with tags:', tags);
 
     createEvent({
       kind: CATALLAX_KINDS.TASK_PROPOSAL,
-      content: JSON.stringify(content),
+      content: JSON.stringify(task.content),
       tags,
-      created_at: Math.floor(Date.now() / 1000), // Ensure we use current timestamp
+      created_at: Math.floor(Date.now() / 1000),
     }, {
       onSuccess: (event) => {
         console.log('Task update published successfully:', event);
         setWorkerPubkey('');
 
         toast({
-          title: 'Worker Assigned!',
-          description: `Worker has been assigned and task status updated to "in progress".`,
+          title: opts.successTitle,
+          description: opts.successDescription,
         });
 
-        // Force immediate refetch of all task queries
         invalidateAllCatallaxQueries();
 
-        // Add a small delay to allow queries to refetch, then call onUpdate
         setTimeout(() => {
           onUpdate?.();
         }, 1500);
@@ -196,83 +157,21 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
     });
   };
 
-  const updateTaskStatusWithoutWorker = (newStatus: TaskStatus, zapReceiptId?: string) => {
-    const content = task.content;
-
-    const tags: string[][] = [
-      ['d', task.d],
-      ['p', task.patronPubkey],
-      ['amount', task.amount],
-      ['t', 'catallax'],
-      ['status', newStatus],
-    ];
-
-    if (task.arbiterPubkey) {
-      tags.push(['p', task.arbiterPubkey]);
-    }
-
-    // Explicitly do NOT add worker pubkey - this removes the worker
-
-    if (task.arbiterService) {
-      tags.push(['a', task.arbiterService]);
-    }
-
-    if (task.detailsUrl) {
-      tags.push(['r', task.detailsUrl]);
-    }
-
-    if (task.zapReceiptId || zapReceiptId) {
-      tags.push(['e', task.zapReceiptId || zapReceiptId || '', '', 'zap']);
-    }
-
-    // Add task categories
-    task.categories.forEach(category => {
-      if (category !== 'catallax') {
-        tags.push(['t', category]);
-      }
+  const updateTaskStatus = (newStatus: TaskStatus, zapReceiptId?: string, workerPubkeyOverride?: string) => {
+    publishTaskUpdate(newStatus, {
+      workerPubkey: workerPubkeyOverride || task.workerPubkey,
+      zapReceiptId: zapReceiptId || null,
+      successTitle: 'Task Updated!',
+      successDescription: `Task status updated to "${newStatus.replace('_', ' ')}".`,
     });
+  };
 
-    // Preserve NIP-75 crowdfunding fields across status transitions
-    if (task.fundingType === 'crowdfunding') {
-      tags.push(['funding_type', 'crowdfunding']);
-      if (task.goalId) {
-        tags.push(['goal', task.goalId]);
-      }
-    }
-
-    console.log('Publishing task update without worker, tags:', tags);
-
-    createEvent({
-      kind: CATALLAX_KINDS.TASK_PROPOSAL,
-      content: JSON.stringify(content),
-      tags,
-      created_at: Math.floor(Date.now() / 1000), // Ensure we use current timestamp
-    }, {
-      onSuccess: (event) => {
-        console.log('Task update (worker removed) published successfully:', event);
-        setWorkerPubkey('');
-
-        toast({
-          title: 'Worker Removed!',
-          description: `Worker has been removed and task status updated to "funded".`,
-        });
-
-        // Force immediate refetch of all task queries
-        invalidateAllCatallaxQueries();
-
-        // Add a small delay to allow queries to refetch, then call onUpdate
-        setTimeout(() => {
-          onUpdate?.();
-        }, 1500);
-      },
-      onError: (error) => {
-        console.error('Failed to publish task update:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to remove worker. Please try again.',
-          variant: 'destructive',
-        });
-      },
+  const updateTaskStatusWithoutWorker = (newStatus: TaskStatus, zapReceiptId?: string) => {
+    publishTaskUpdate(newStatus, {
+      workerPubkey: null, // Explicitly no worker
+      zapReceiptId: zapReceiptId || null,
+      successTitle: 'Worker Removed!',
+      successDescription: `Worker has been removed and task status updated to "${newStatus.replace('_', ' ')}".`,
     });
   };
 

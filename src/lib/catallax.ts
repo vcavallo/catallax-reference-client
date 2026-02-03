@@ -230,6 +230,60 @@ export function parseTaskConclusion(event: NostrEvent): TaskConclusion | null {
   }
 }
 
+export function buildTaskTags(
+  task: TaskProposal,
+  newStatus: TaskStatus,
+  opts?: { workerPubkey?: string | null; zapReceiptId?: string | null },
+): string[][] {
+  const tags: string[][] = [
+    ['d', task.d],
+    ['p', task.patronPubkey],
+    ['amount', task.amount],
+    ['t', 'catallax'],
+    ['status', newStatus],
+  ];
+
+  if (task.arbiterPubkey) {
+    tags.push(['p', task.arbiterPubkey]);
+  }
+
+  // Include worker pubkey if provided (or keep existing)
+  const workerKey = opts?.workerPubkey !== undefined ? opts.workerPubkey : task.workerPubkey;
+  if (workerKey) {
+    tags.push(['p', workerKey]);
+  }
+
+  if (task.arbiterService) {
+    tags.push(['a', task.arbiterService]);
+  }
+
+  if (task.detailsUrl) {
+    tags.push(['r', task.detailsUrl]);
+  }
+
+  const receiptId = opts?.zapReceiptId || task.zapReceiptId;
+  if (receiptId) {
+    tags.push(['e', receiptId, '', 'zap']);
+  }
+
+  // Add task categories
+  task.categories.forEach(category => {
+    if (category !== 'catallax') {
+      tags.push(['t', category]);
+    }
+  });
+
+  // Preserve NIP-75 crowdfunding fields across status transitions
+  if (task.fundingType === 'crowdfunding') {
+    tags.push(['funding_type', 'crowdfunding']);
+    if (task.goalId) {
+      tags.push(['goal', task.goalId]);
+    }
+  }
+
+  return tags;
+}
+
 export function formatSats(sats: string | number): string {
   const amount = typeof sats === 'string' ? parseInt(sats) : sats;
   if (amount >= 100000000) {
