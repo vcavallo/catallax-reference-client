@@ -438,6 +438,47 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
                   <Zap className="h-4 w-4 mr-2" />
                   Fund Escrow ({formatSats(task.amount)})
                 </Button>
+
+                {/* Debug: Mark as funded if payment was already made */}
+                <div className="pt-2 border-t border-dashed border-orange-200">
+                  <Alert className="border-orange-200 bg-orange-50">
+                    <Bug className="h-4 w-4 text-orange-600" />
+                    <AlertDescription className="text-orange-800">
+                      <strong>Already paid?</strong> If you already sent payment but the status didn't update,
+                      enter the zap receipt ID below to mark this task as funded with proof of payment.
+                    </AlertDescription>
+                  </Alert>
+                  <div className="mt-2 space-y-2">
+                    <Input
+                      id="manualZapReceipt"
+                      placeholder="Zap receipt event ID (64 hex chars)"
+                      className="font-mono text-xs"
+                    />
+                    <Button
+                      onClick={() => {
+                        const input = document.getElementById('manualZapReceipt') as HTMLInputElement;
+                        const zapId = input?.value?.trim();
+                        if (zapId && /^[0-9a-fA-F]{64}$/.test(zapId)) {
+                          updateTaskStatus('funded', zapId);
+                        } else if (!zapId) {
+                          updateTaskStatus('funded');
+                        } else {
+                          toast({
+                            title: 'Invalid ID',
+                            description: 'Please enter a valid 64-character hex event ID, or leave empty.',
+                            variant: 'destructive',
+                          });
+                        }
+                      }}
+                      disabled={isPending}
+                      variant="outline"
+                      className="w-full border-orange-200 text-orange-700 hover:bg-orange-50"
+                    >
+                      <Bug className="h-4 w-4 mr-2" />
+                      Debug: Mark as Funded
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -475,6 +516,50 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
                     </p>
                   )}
                 </div>
+
+                {/* Add/Update Zap Receipt - Show if no zap receipt is linked */}
+                {!task.zapReceiptId && (
+                  <div className="pt-2 border-t border-dashed border-orange-200">
+                    <Alert className="border-orange-200 bg-orange-50">
+                      <Bug className="h-4 w-4 text-orange-600" />
+                      <AlertDescription className="text-orange-800">
+                        <strong>Missing zap receipt:</strong> Add the zap receipt ID to link proof of payment.
+                      </AlertDescription>
+                    </Alert>
+                    <div className="mt-2 space-y-2">
+                      <Input
+                        id="addZapReceipt"
+                        placeholder="Zap receipt event ID (64 hex chars)"
+                        className="font-mono text-xs"
+                      />
+                      <Button
+                        onClick={() => {
+                          const input = document.getElementById('addZapReceipt') as HTMLInputElement;
+                          const zapId = input?.value?.trim();
+                          if (zapId && /^[0-9a-fA-F]{64}$/.test(zapId)) {
+                            updateTaskStatus(task.status, zapId);
+                            toast({
+                              title: 'Zap Receipt Added',
+                              description: 'Task updated with zap receipt reference.',
+                            });
+                          } else {
+                            toast({
+                              title: 'Invalid ID',
+                              description: 'Please enter a valid 64-character hex event ID.',
+                              variant: 'destructive',
+                            });
+                          }
+                        }}
+                        disabled={isPending}
+                        variant="outline"
+                        className="w-full border-orange-200 text-orange-700 hover:bg-orange-50"
+                      >
+                        <Bug className="h-4 w-4 mr-2" />
+                        Add Zap Receipt
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Remove Worker - Only show if there's a worker assigned */}
                 {task.workerPubkey && (
@@ -683,6 +768,7 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
             amount={parseInt(task.amount)}
             purpose={`Escrow funding for task: ${task.content.title}`}
             onPaymentComplete={handleFundEscrow}
+            eventReference={`${CATALLAX_KINDS.TASK_PROPOSAL}:${task.patronPubkey}:${task.d}`}
           />
         ) : (
           <ZapDialog
@@ -705,6 +791,7 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
             amount={parseInt(task.amount)}
             purpose={`Payment for completed work: ${task.content.title}`}
             onPaymentComplete={handlePayWorker}
+            eventReference={`${CATALLAX_KINDS.TASK_PROPOSAL}:${task.patronPubkey}:${task.d}`}
           />
         ) : (
           <ZapDialog
@@ -726,6 +813,7 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
           amount={parseInt(task.amount)}
           purpose={`Refund for task: ${task.content.title}`}
           onPaymentComplete={handleRefundPatron}
+          eventReference={`${CATALLAX_KINDS.TASK_PROPOSAL}:${task.patronPubkey}:${task.d}`}
         />
       ) : (
         <ZapDialog

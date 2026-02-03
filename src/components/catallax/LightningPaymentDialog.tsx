@@ -27,6 +27,8 @@ interface LightningPaymentDialogProps {
   purpose: string;
   onPaymentComplete: (zapReceiptId: string) => void;
   onPaymentError?: (error: string) => void;
+  /** Addressable event reference (a tag) for the task being funded, e.g. "33401:pubkey:d-tag" */
+  eventReference?: string;
 }
 
 export function LightningPaymentDialog({
@@ -37,6 +39,7 @@ export function LightningPaymentDialog({
   purpose,
   onPaymentComplete,
   onPaymentError,
+  eventReference,
 }: LightningPaymentDialogProps) {
   const { user } = useCurrentUser();
   const { nostr } = useNostr();
@@ -126,14 +129,21 @@ export function LightningPaymentDialog({
       }
 
       // Create zap request event (NIP-57)
+      const zapRequestTags: string[][] = [
+        ['p', recipientPubkey],
+        ['amount', amountMsat.toString()],
+        ['relays', 'wss://relay.nostr.band', 'wss://nos.lol'],
+      ];
+
+      // Add event reference if provided (links zap to a specific task/event)
+      if (eventReference) {
+        zapRequestTags.push(['a', eventReference]);
+      }
+
       const zapRequest = await user.signer.signEvent({
         kind: 9734,
         content: comment || purpose,
-        tags: [
-          ['p', recipientPubkey],
-          ['amount', amountMsat.toString()],
-          ['relays', 'wss://relay.nostr.band', 'wss://nos.lol'],
-        ],
+        tags: zapRequestTags,
         created_at: Math.floor(Date.now() / 1000),
       });
 
