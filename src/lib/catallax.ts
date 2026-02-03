@@ -353,7 +353,9 @@ export function parseZapReceiptAmount(receipt: NostrEvent): number {
   if (bolt11Tag?.[1]) {
     const bolt11 = bolt11Tag[1].toLowerCase();
     // BOLT11 amount: lnbc<amount><multiplier> where multipliers are m=milli, u=micro, n=nano, p=pico
-    const match = bolt11.match(/^lnbc(\d+)([munp]?)/);
+    // The multiplier must be followed by '1' (bech32 separator). If we see [munp] NOT followed by
+    // a digit, it's the multiplier. If we see digits followed directly by '1', there's no multiplier.
+    const match = bolt11.match(/^lnbc(\d+)([mun](?=1)|p(?=1))?1/);
     if (match) {
       const value = parseInt(match[1]);
       const multiplier = match[2];
