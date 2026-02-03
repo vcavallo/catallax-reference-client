@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Zap, DollarSign, RefreshCw, Bug, AlertTriangle } from 'lucide-react';
+import { Zap, Bitcoin, RefreshCw, Bug, AlertTriangle } from 'lucide-react';
 import { CATALLAX_KINDS, formatSats, getStatusColor, calculatePaymentSplit, calculateArbiterFee, parseArbiterAnnouncement, type TaskProposal, type TaskStatus, type ArbiterAnnouncement } from '@/lib/catallax';
 import { TaskConclusionForm } from './TaskConclusionForm';
 import { ZapDialog } from './ZapDialog';
@@ -535,7 +535,7 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
             {(task.status === 'funded' || task.status === 'in_progress' || task.status === 'submitted' || task.zapReceiptId) && (
               <div className="space-y-3">
                 <Alert>
-                  <DollarSign className="h-4 w-4" />
+                  <Bitcoin className="h-4 w-4" />
                   <AlertDescription>
                     <strong>Assign Worker:</strong> Enter the public key of the worker who will complete this task.
                     {task.status === 'funded' && ' This will update the task status to "in progress".'}
@@ -666,7 +666,7 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
             <h4 className="font-medium">Arbiter Actions</h4>
 
             <Alert>
-              <DollarSign className="h-4 w-4" />
+              <Bitcoin className="h-4 w-4" />
               <AlertDescription>
                 As the arbiter, you can either pay the worker (if work is satisfactory)
                 or refund the patron (if work is unsatisfactory or task is cancelled).

@@ -33,6 +33,7 @@ export function TaskCard({ task, onApply, onManage, onFund, showApplyButton, sho
   const { user } = useCurrentUser();
   const { toast } = useToast();
   const [showFundDialog, setShowFundDialog] = useState(false);
+  const [waitingForPayment, setWaitingForPayment] = useState(false);
   const patronAuthor = useAuthor(task.patronPubkey);
   const arbiterAuthor = useAuthor(task.arbiterPubkey || '');
   const workerAuthor = useAuthor(task.workerPubkey || '');
@@ -178,7 +179,12 @@ export function TaskCard({ task, onApply, onManage, onFund, showApplyButton, sho
 
         {/* Crowdfunding progress */}
         {task.fundingType === 'crowdfunding' && task.goalId && (
-          <GoalProgressBar goalId={task.goalId} className="pt-2" />
+          <GoalProgressBar
+            goalId={task.goalId}
+            className="pt-2"
+            waitingForPayment={waitingForPayment}
+            onWaitingComplete={() => setWaitingForPayment(false)}
+          />
         )}
 
         <div className="flex gap-2 pt-2">
@@ -212,7 +218,12 @@ export function TaskCard({ task, onApply, onManage, onFund, showApplyButton, sho
           )}
 
           {task.fundingType === 'crowdfunding' && task.status === 'proposed' && (
-            <CrowdfundButton task={task} realZapsEnabled={realZapsEnabled} className="ml-auto" />
+            <CrowdfundButton
+              task={task}
+              realZapsEnabled={realZapsEnabled}
+              className="ml-auto"
+              onPaymentComplete={() => setWaitingForPayment(true)}
+            />
           )}
 
           {showManageButton && onManage && (

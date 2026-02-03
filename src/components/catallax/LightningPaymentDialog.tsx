@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { getLightningAddressFromMetadata } from '@/hooks/useRealZap';
 import { useAuthor } from '@/hooks/useAuthor';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -47,6 +48,7 @@ export function LightningPaymentDialog({
   const { user } = useCurrentUser();
   const { nostr } = useNostr();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const author = useAuthor(recipientPubkey);
   const metadata = author.data?.metadata;
 
@@ -328,6 +330,21 @@ export function LightningPaymentDialog({
 
     // Trigger the task status update
     onPaymentComplete(zapReceiptId);
+
+    // Invalidate the zap goal query so the progress bar updates
+    if (goalId) {
+      // Invalidate immediately for any cached data
+      queryClient.invalidateQueries({ queryKey: ['zap-goal', goalId] });
+
+      // Also invalidate after delays to catch receipt propagation to relays
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['zap-goal', goalId] });
+      }, 3000);
+
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['zap-goal', goalId] });
+      }, 8000);
+    }
 
     // Auto-close after success
     setTimeout(() => {

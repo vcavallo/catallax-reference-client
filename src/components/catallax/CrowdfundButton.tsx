@@ -11,9 +11,11 @@ interface CrowdfundButtonProps {
   task: TaskProposal;
   realZapsEnabled?: boolean;
   className?: string;
+  /** Called when a payment is successfully completed */
+  onPaymentComplete?: () => void;
 }
 
-export function CrowdfundButton({ task, realZapsEnabled = false, className }: CrowdfundButtonProps) {
+export function CrowdfundButton({ task, realZapsEnabled = false, className, onPaymentComplete }: CrowdfundButtonProps) {
   const { user } = useCurrentUser();
   const [showZapDialog, setShowZapDialog] = useState(false);
 
@@ -21,6 +23,11 @@ export function CrowdfundButton({ task, realZapsEnabled = false, className }: Cr
 
   // Only show for crowdfunded tasks that are still in proposed status
   if (task.fundingType !== 'crowdfunding' || task.status !== 'proposed') return null;
+
+  const handlePaymentComplete = () => {
+    setShowZapDialog(false);
+    onPaymentComplete?.();
+  };
 
   return (
     <>
@@ -30,7 +37,7 @@ export function CrowdfundButton({ task, realZapsEnabled = false, className }: Cr
         className={className}
       >
         <Zap className="h-4 w-4 mr-1" />
-        Fund ({formatSats(task.amount)})
+        Contribute
       </Button>
 
       {realZapsEnabled ? (
@@ -40,7 +47,7 @@ export function CrowdfundButton({ task, realZapsEnabled = false, className }: Cr
           recipientPubkey={task.arbiterPubkey}
           amount={parseInt(task.amount)}
           purpose={`Crowdfunding contribution for: ${task.content.title}`}
-          onPaymentComplete={() => setShowZapDialog(false)}
+          onPaymentComplete={handlePaymentComplete}
           eventReference={`${CATALLAX_KINDS.TASK_PROPOSAL}:${task.patronPubkey}:${task.d}`}
           goalId={task.goalId}
         />
@@ -51,7 +58,7 @@ export function CrowdfundButton({ task, realZapsEnabled = false, className }: Cr
           recipientPubkey={task.arbiterPubkey}
           amount={parseInt(task.amount)}
           purpose={`Crowdfunding contribution for: ${task.content.title}`}
-          onZapComplete={() => setShowZapDialog(false)}
+          onZapComplete={handlePaymentComplete}
         />
       )}
     </>

@@ -5,6 +5,7 @@ import { formatSats, type GoalContributor, type RefundSplit } from '@/lib/catall
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { genUserName } from '@/lib/genUserName';
+import { CopyNpubButton } from '@/components/CopyNpubButton';
 import {
   Collapsible,
   CollapsibleContent,
@@ -125,7 +126,10 @@ function ContributorRow({
           <AvatarFallback>{displayName.slice(0, 2).toUpperCase()}</AvatarFallback>
         </Avatar>
         <div>
-          <div className="text-sm font-medium">{displayName}</div>
+          <div className="flex items-center gap-1 text-sm font-medium">
+            {displayName}
+            <CopyNpubButton pubkey={contributor.pubkey} size="sm" className="h-5 w-5 p-0" />
+          </div>
           <div className="text-xs text-muted-foreground">
             {(contributor.percentage * 100).toFixed(1)}% of total
           </div>

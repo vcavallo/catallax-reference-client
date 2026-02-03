@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { nip19 } from 'nostr-tools';
@@ -8,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Copy, ExternalLink, ArrowLeft, Calendar, DollarSign, User, RefreshCw } from 'lucide-react';
+import { Copy, ExternalLink, ArrowLeft, Calendar, Bitcoin, User, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { useAuthor } from '@/hooks/useAuthor';
 import { TaskManagement } from '@/components/catallax/TaskManagement';
@@ -19,6 +20,7 @@ import { RelaySelector } from '@/components/RelaySelector';
 import { CopyNpubButton } from '@/components/CopyNpubButton';
 import { GoalProgressBar } from '@/components/catallax/GoalProgressBar';
 import { ContributorsList } from '@/components/catallax/ContributorsList';
+import { CrowdfundButton } from '@/components/catallax/CrowdfundButton';
 
 export function TaskDetail() {
   const { nip19: nip19Param } = useParams<{ nip19: string }>();
@@ -27,6 +29,7 @@ export function TaskDetail() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { invalidateAllCatallaxQueries } = useCatallaxInvalidation();
+  const [waitingForPayment, setWaitingForPayment] = useState(false);
 
   // Decode the naddr to get task details
   const taskAddress = nip19Param ? (() => {
@@ -353,7 +356,7 @@ export function TaskDetail() {
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <Bitcoin className="h-4 w-4 text-muted-foreground" />
                     <span className="font-medium">Amount</span>
                   </div>
                   <p className="text-lg font-semibold">{formatSats(task.amount)}</p>
@@ -430,7 +433,20 @@ export function TaskDetail() {
                 <h3 className="font-medium mb-2">Crowdfunding Progress</h3>
                 <Card>
                   <CardContent className="p-4 space-y-4">
-                    <GoalProgressBar goalId={task.goalId} />
+                    <GoalProgressBar
+                      goalId={task.goalId}
+                      waitingForPayment={waitingForPayment}
+                      onWaitingComplete={() => setWaitingForPayment(false)}
+                    />
+
+                    {task.status === 'proposed' && (
+                      <CrowdfundButton
+                        task={task}
+                        realZapsEnabled={true}
+                        onPaymentComplete={() => setWaitingForPayment(true)}
+                      />
+                    )}
+
                     <ContributorsList goalId={task.goalId} />
                   </CardContent>
                 </Card>
