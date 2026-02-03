@@ -11,10 +11,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, X } from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { CalendarIcon, X, Users, User as UserIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { CATALLAX_KINDS, generateTaskId } from '@/lib/catallax';
+import { CATALLAX_KINDS, generateTaskId, buildGoalEventTags, type FundingType } from '@/lib/catallax';
+import { useAppContext } from '@/hooks/useAppContext';
 import { FilteredArbiterSelect } from './FilteredArbiterSelect';
 
 interface TaskProposalFormProps {
@@ -25,6 +27,7 @@ export function TaskProposalForm({ onSuccess }: TaskProposalFormProps) {
   const { user } = useCurrentUser();
   const { mutate: createEvent, isPending } = useNostrPublish();
   const { data: arbiters = [] } = useArbiterAnnouncements();
+  const { config } = useAppContext();
 
   const [formData, setFormData] = useState({
     title: '',
@@ -34,18 +37,21 @@ export function TaskProposalForm({ onSuccess }: TaskProposalFormProps) {
     detailsUrl: '',
     selectedArbiter: '',
   });
+  const [fundingType, setFundingType] = useState<FundingType>('single');
 
   const [categories, setCategories] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState('');
   const [deadline, setDeadline] = useState<Date>();
   const [onlyGrapeTrusted, setOnlyGrapeTrusted] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !formData.selectedArbiter) return;
 
     const selectedArbiterData = arbiters.find(a => `${a.arbiterPubkey}:${a.d}` === formData.selectedArbiter);
     if (!selectedArbiterData) return;
+
+    const taskId = generateTaskId(formData.title);
 
     const content = {
       title: formData.title,
@@ -55,13 +61,14 @@ export function TaskProposalForm({ onSuccess }: TaskProposalFormProps) {
     };
 
     const tags: string[][] = [
-      ['d', generateTaskId(formData.title)],
+      ['d', taskId],
       ['p', user.pubkey],
       ['p', selectedArbiterData.arbiterPubkey],
       ['a', `33400:${selectedArbiterData.arbiterPubkey}:${selectedArbiterData.d}`],
       ['amount', formData.amount],
       ['t', 'catallax'],
       ['status', 'proposed'],
+      ['funding_type', fundingType],
     ];
 
     if (formData.detailsUrl) {
@@ -72,25 +79,76 @@ export function TaskProposalForm({ onSuccess }: TaskProposalFormProps) {
       tags.push(['t', category]);
     });
 
-    createEvent({
-      kind: CATALLAX_KINDS.TASK_PROPOSAL,
-      content: JSON.stringify(content),
-      tags,
-    }, {
-      onSuccess: () => {
-        setFormData({
-          title: '',
-          description: '',
-          requirements: '',
-          amount: '',
-          detailsUrl: '',
-          selectedArbiter: '',
-        });
-        setCategories([]);
-        setDeadline(undefined);
-        onSuccess?.();
-      },
-    });
+    // For crowdfunded tasks, create the goal event first, then link it
+    if (fundingType === 'crowdfunding') {
+      const goalTags = buildGoalEventTags(
+        {
+          title: formData.title,
+          description: formData.description,
+          amount: formData.amount,
+          d: taskId,
+        },
+        user.pubkey,
+        selectedArbiterData.arbiterPubkey,
+        [config.relayUrl],
+      );
+
+      // Publish goal event first, then create task with goal reference
+      createEvent({
+        kind: 9041,
+        content: `Crowdfunding goal for: ${formData.title}`,
+        tags: goalTags,
+      }, {
+        onSuccess: (goalEvent) => {
+          // Add goal reference to task tags
+          tags.push(['goal', goalEvent.id, config.relayUrl]);
+
+          // Now publish the task with the goal reference
+          createEvent({
+            kind: CATALLAX_KINDS.TASK_PROPOSAL,
+            content: JSON.stringify(content),
+            tags,
+          }, {
+            onSuccess: () => {
+              setFormData({
+                title: '',
+                description: '',
+                requirements: '',
+                amount: '',
+                detailsUrl: '',
+                selectedArbiter: '',
+              });
+              setCategories([]);
+              setDeadline(undefined);
+              setFundingType('single');
+              onSuccess?.();
+            },
+          });
+        },
+      });
+    } else {
+      // Single patron flow - publish task directly
+      createEvent({
+        kind: CATALLAX_KINDS.TASK_PROPOSAL,
+        content: JSON.stringify(content),
+        tags,
+      }, {
+        onSuccess: () => {
+          setFormData({
+            title: '',
+            description: '',
+            requirements: '',
+            amount: '',
+            detailsUrl: '',
+            selectedArbiter: '',
+          });
+          setCategories([]);
+          setDeadline(undefined);
+          setFundingType('single');
+          onSuccess?.();
+        },
+      });
+    }
   };
 
   const addCategory = () => {
@@ -198,6 +256,35 @@ export function TaskProposalForm({ onSuccess }: TaskProposalFormProps) {
                 </PopoverContent>
               </Popover>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Funding Type</Label>
+            <RadioGroup
+              value={fundingType}
+              onValueChange={(value) => setFundingType(value as FundingType)}
+              className="flex gap-4"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="single" id="funding-single" />
+                <Label htmlFor="funding-single" className="flex items-center gap-1 cursor-pointer">
+                  <UserIcon className="h-4 w-4" />
+                  Single Patron
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="crowdfunding" id="funding-crowd" />
+                <Label htmlFor="funding-crowd" className="flex items-center gap-1 cursor-pointer">
+                  <Users className="h-4 w-4" />
+                  Crowdfunding
+                </Label>
+              </div>
+            </RadioGroup>
+            {fundingType === 'crowdfunding' && (
+              <p className="text-xs text-muted-foreground">
+                A NIP-75 Zap Goal will be created automatically. Multiple contributors can fund this task.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

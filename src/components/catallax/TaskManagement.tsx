@@ -20,6 +20,9 @@ import { TaskConclusionForm } from './TaskConclusionForm';
 import { ZapDialog } from './ZapDialog';
 import { ZapSplitDialog } from './ZapSplitDialog';
 import { LightningPaymentDialog } from './LightningPaymentDialog';
+import { GoalProgressBar } from './GoalProgressBar';
+import { ContributorsList } from './ContributorsList';
+import { useZapGoal } from '@/hooks/useZapGoal';
 
 interface TaskManagementProps {
   task: TaskProposal;
@@ -71,6 +74,9 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
     refetchOnWindowFocus: true,
   });
 
+
+  // Fetch crowdfunding goal data if applicable
+  const { data: goalData } = useZapGoal(task.fundingType === 'crowdfunding' ? task.goalId : undefined);
 
   const [workerPubkey, setWorkerPubkey] = useState('');
   const [showConclusionForm, setShowConclusionForm] = useState(false);
@@ -421,7 +427,34 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
           <div className="space-y-4">
             <h4 className="font-medium">Patron Actions</h4>
 
-            {task.status === 'proposed' && task.arbiterPubkey && (
+            {/* Crowdfunding progress section */}
+            {task.fundingType === 'crowdfunding' && task.goalId && task.status === 'proposed' && (
+              <div className="space-y-3">
+                <Alert>
+                  <Zap className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Crowdfunding:</strong> This task is being funded by multiple contributors via a NIP-75 Zap Goal.
+                    {goalData?.progress.isGoalMet
+                      ? ' The goal has been reached! You can now mark this task as funded.'
+                      : ' Share the task to attract more contributors.'}
+                  </AlertDescription>
+                </Alert>
+                <GoalProgressBar goalId={task.goalId} />
+                <ContributorsList goalId={task.goalId} />
+                {goalData?.progress.isGoalMet && (
+                  <Button
+                    onClick={() => updateTaskStatus('funded')}
+                    disabled={isPending}
+                    className="w-full"
+                  >
+                    <Zap className="h-4 w-4 mr-2" />
+                    Mark as Funded (Goal Reached)
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {task.status === 'proposed' && task.arbiterPubkey && task.fundingType !== 'crowdfunding' && (
               <div className="space-y-3">
                 <Alert>
                   <Zap className="h-4 w-4" />
