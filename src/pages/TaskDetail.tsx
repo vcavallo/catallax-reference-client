@@ -17,6 +17,8 @@ import { useCatallaxInvalidation } from '@/hooks/useCatallax';
 import { genUserName } from '@/lib/genUserName';
 import { RelaySelector } from '@/components/RelaySelector';
 import { CopyNpubButton } from '@/components/CopyNpubButton';
+import { GoalProgressBar } from '@/components/catallax/GoalProgressBar';
+import { ContributorsList } from '@/components/catallax/ContributorsList';
 
 export function TaskDetail() {
   const { nip19: nip19Param } = useParams<{ nip19: string }>();
@@ -421,6 +423,19 @@ export function TaskDetail() {
                 </Card>
               )}
             </div>
+
+            {/* Crowdfunding Progress */}
+            {task.fundingType === 'crowdfunding' && task.goalId && (
+              <div>
+                <h3 className="font-medium mb-2">Crowdfunding Progress</h3>
+                <Card>
+                  <CardContent className="p-4 space-y-4">
+                    <GoalProgressBar goalId={task.goalId} />
+                    <ContributorsList goalId={task.goalId} />
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
             {/* Categories */}
             {task.categories.length > 0 && (

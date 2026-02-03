@@ -106,6 +106,41 @@ Catallax enables decentralized contract work through a simple escrow system buil
 }
 ```
 
+### Kind 9041: Zap Goal (NIP-75)
+
+Used for **crowdfunded tasks**. When a task proposal has `funding_type` set to `crowdfunding`, a linked Kind 9041 event is created to enable multiple contributors to fund the task.
+
+```json
+{
+  "kind": 9041,
+  "content": "Crowdfunding goal for: <task title>",
+  "tags": [
+    ["relays", "<relay-url-1>", "<relay-url-2>"],
+    ["amount", "<target amount in millisats>"],
+    ["summary", "<brief description>"],
+    ["a", "33401:<patron-pubkey>:<task-d-tag>", "<relay-url>"],
+    ["zap", "<arbiter-pubkey>", "<relay-url>", "1"],
+    ["alt", "Crowdfunding goal for Catallax task: <title>"]
+  ]
+}
+```
+
+### Crowdfunding Extensions to Kind 33401
+
+When a task uses crowdfunding, the following additional tags are added:
+
+- `["funding_type", "single|crowdfunding"]` — Funding mechanism (defaults to `single` for backwards compatibility)
+- `["goal", "<kind-9041-event-id>", "<relay-url>"]` — Reference to the linked NIP-75 Zap Goal event
+
+### Crowdfunding Workflow
+
+1. Patron creates a task with `funding_type` set to `crowdfunding`
+2. A Kind 9041 Zap Goal event is automatically created and linked via the `goal` tag
+3. Multiple contributors zap the goal event to fund the task
+4. When the goal amount is reached, the patron or arbiter marks the task as `funded`
+5. Work proceeds as normal (worker assignment, submission, conclusion)
+6. If the task is cancelled, refunds are calculated proportionally based on each contributor's share
+
 ## Implementation Notes
 
 This project implements a complete UI for testing all Catallax protocol features, including:
