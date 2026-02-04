@@ -90,6 +90,13 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
   const [conclusionZapReceiptId, setConclusionZapReceiptId] = useState('');
   const [cancelState, setCancelState] = useState<'idle' | 'syncing' | 'complete'>('idle');
 
+  // Generic operation state for funding, worker assignment, etc.
+  type OperationType = 'funding' | 'assigning' | 'removing' | 'submitting' | 'crowdfund-marking';
+  const [operationState, setOperationState] = useState<{
+    type: OperationType | null;
+    status: 'idle' | 'syncing' | 'complete';
+  }>({ type: null, status: 'idle' });
+
   if (!user) {
     return (
       <Card>
@@ -143,7 +150,12 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
     );
   }
 
-  const updateTaskStatus = (newStatus: TaskStatus, zapReceiptId?: string, workerPubkeyOverride?: string) => {
+  const updateTaskStatus = (newStatus: TaskStatus, zapReceiptId?: string, workerPubkeyOverride?: string, operation?: OperationType) => {
+    // Set operation state to syncing if an operation type is provided
+    if (operation) {
+      setOperationState({ type: operation, status: 'syncing' });
+    }
+
     const content = task.content;
 
     const tags: string[][] = [
@@ -201,27 +213,37 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
         console.log('Task update published successfully:', event);
         setWorkerPubkey('');
 
-        // Show appropriate toast based on the status update
-        const toastMessages: Record<TaskStatus, { title: string; description: string }> = {
-          proposed: { title: 'Task Updated', description: 'Task status updated to "proposed".' },
-          funded: { title: 'Task Funded!', description: 'Task has been marked as funded.' },
-          in_progress: { title: 'Worker Assigned!', description: 'Worker has been assigned and task status updated to "in progress".' },
-          submitted: { title: 'Work Submitted', description: 'Task status updated to "submitted".' },
-          concluded: { title: 'Task Concluded', description: 'Task has been concluded.' },
-        };
-        const message = toastMessages[newStatus] || { title: 'Task Updated', description: `Task status updated to "${newStatus}".` };
-        toast(message);
-
         // Force immediate refetch of all task queries
         invalidateAllCatallaxQueries();
 
-        // Add a small delay to allow queries to refetch, then call onUpdate
-        setTimeout(() => {
-          onUpdate?.();
-        }, 1500);
+        // If tracking an operation, show complete state after delay
+        if (operation) {
+          setTimeout(() => {
+            setOperationState({ type: operation, status: 'complete' });
+          }, 2000);
+        } else {
+          // Show appropriate toast based on the status update
+          const toastMessages: Record<TaskStatus, { title: string; description: string }> = {
+            proposed: { title: 'Task Updated', description: 'Task status updated to "proposed".' },
+            funded: { title: 'Task Funded!', description: 'Task has been marked as funded.' },
+            in_progress: { title: 'Worker Assigned!', description: 'Worker has been assigned and task status updated to "in progress".' },
+            submitted: { title: 'Work Submitted', description: 'Task status updated to "submitted".' },
+            concluded: { title: 'Task Concluded', description: 'Task has been concluded.' },
+          };
+          const message = toastMessages[newStatus] || { title: 'Task Updated', description: `Task status updated to "${newStatus}".` };
+          toast(message);
+
+          // Add a small delay to allow queries to refetch, then call onUpdate
+          setTimeout(() => {
+            onUpdate?.();
+          }, 1500);
+        }
       },
       onError: (error) => {
         console.error('Failed to publish task update:', error);
+        if (operation) {
+          setOperationState({ type: null, status: 'idle' });
+        }
         toast({
           title: 'Error',
           description: 'Failed to update task. Please try again.',
@@ -231,7 +253,12 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
     });
   };
 
-  const updateTaskStatusWithoutWorker = (newStatus: TaskStatus, zapReceiptId?: string) => {
+  const updateTaskStatusWithoutWorker = (newStatus: TaskStatus, zapReceiptId?: string, operation?: OperationType) => {
+    // Set operation state to syncing if an operation type is provided
+    if (operation) {
+      setOperationState({ type: operation, status: 'syncing' });
+    }
+
     const content = task.content;
 
     const tags: string[][] = [
@@ -287,21 +314,31 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
         console.log('Task update (worker removed) published successfully:', event);
         setWorkerPubkey('');
 
-        toast({
-          title: 'Worker Removed!',
-          description: `Worker has been removed and task status updated to "funded".`,
-        });
-
         // Force immediate refetch of all task queries
         invalidateAllCatallaxQueries();
 
-        // Add a small delay to allow queries to refetch, then call onUpdate
-        setTimeout(() => {
-          onUpdate?.();
-        }, 1500);
+        // If tracking an operation, show complete state after delay
+        if (operation) {
+          setTimeout(() => {
+            setOperationState({ type: operation, status: 'complete' });
+          }, 2000);
+        } else {
+          toast({
+            title: 'Worker Removed!',
+            description: `Worker has been removed and task status updated to "funded".`,
+          });
+
+          // Add a small delay to allow queries to refetch, then call onUpdate
+          setTimeout(() => {
+            onUpdate?.();
+          }, 1500);
+        }
       },
       onError: (error) => {
         console.error('Failed to publish task update:', error);
+        if (operation) {
+          setOperationState({ type: null, status: 'idle' });
+        }
         toast({
           title: 'Error',
           description: 'Failed to remove worker. Please try again.',
@@ -313,13 +350,8 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
 
   const handleFundEscrow = (zapReceiptId: string) => {
     // Automatically update task status to "funded" after successful Lightning payment
-    updateTaskStatus('funded', zapReceiptId);
     setShowFundDialog(false);
-
-    toast({
-      title: 'Task Funded!',
-      description: 'Task status updated to "funded". You can now assign a worker.',
-    });
+    updateTaskStatus('funded', zapReceiptId, undefined, 'funding');
   };
 
   const handleAssignWorker = () => {
@@ -360,13 +392,6 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
       return;
     }
 
-    // Show immediate feedback
-    const isReassignment = !!task.workerPubkey;
-    toast({
-      title: isReassignment ? 'Reassigning Worker...' : 'Assigning Worker...',
-      description: 'Publishing task update to the network.',
-    });
-
     // Determine the appropriate status based on current status
     let newStatus: TaskStatus;
     if (task.status === 'funded') {
@@ -376,21 +401,16 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
       newStatus = task.status;
     }
 
-    updateTaskStatus(newStatus, undefined, hexPubkey);
+    updateTaskStatus(newStatus, undefined, hexPubkey, 'assigning');
   };
 
   const handleRemoveWorker = () => {
-    toast({
-      title: 'Removing Worker...',
-      description: 'Publishing task update to the network.',
-    });
-
     // Remove worker and set status back to funded
-    updateTaskStatusWithoutWorker('funded');
+    updateTaskStatusWithoutWorker('funded', undefined, 'removing');
   };
 
   const handleMarkSubmitted = () => {
-    updateTaskStatus('submitted');
+    updateTaskStatus('submitted', undefined, undefined, 'submitting');
   };
 
   const handleRefundPatron = (zapReceiptId: string) => {
@@ -567,6 +587,104 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
     );
   }
 
+  // Show operation state UI (funding, assigning, removing, submitting)
+  if (operationState.type && operationState.status !== 'idle') {
+    const operationLabels: Record<OperationType, { syncing: string; complete: string; summary: string }> = {
+      funding: {
+        syncing: 'Funding Task...',
+        complete: 'Task Funded!',
+        summary: 'Task has been funded. You can now assign a worker.',
+      },
+      assigning: {
+        syncing: 'Assigning Worker...',
+        complete: 'Worker Assigned!',
+        summary: 'Worker has been assigned and task is now in progress.',
+      },
+      removing: {
+        syncing: 'Removing Worker...',
+        complete: 'Worker Removed!',
+        summary: 'Worker has been removed. Task is back to funded status.',
+      },
+      submitting: {
+        syncing: 'Submitting Work...',
+        complete: 'Work Submitted!',
+        summary: 'Work has been submitted for review.',
+      },
+      'crowdfund-marking': {
+        syncing: 'Marking as Funded...',
+        complete: 'Crowdfunding Complete!',
+        summary: 'Goal reached! Task is now funded and ready for worker assignment.',
+      },
+    };
+
+    const labels = operationLabels[operationState.type];
+
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {operationState.status === 'syncing' ? (
+              <Loader2 className="h-5 w-5 animate-spin text-yellow-600" />
+            ) : (
+              <CheckCircle className="h-5 w-5 text-green-600" />
+            )}
+            {operationState.status === 'syncing' ? labels.syncing : labels.complete}
+          </CardTitle>
+          <CardDescription>
+            {task.content.title}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Alert className={operationState.status === 'syncing'
+            ? "border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950"
+            : "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950"
+          }>
+            {operationState.status === 'syncing' ? (
+              <Loader2 className="h-4 w-4 animate-spin text-yellow-600" />
+            ) : (
+              <CheckCircle className="h-4 w-4 text-green-600" />
+            )}
+            <AlertDescription className={operationState.status === 'syncing'
+              ? "text-yellow-800 dark:text-yellow-200"
+              : "text-green-800 dark:text-green-200"
+            }>
+              {operationState.status === 'syncing' ? (
+                <>
+                  <strong>Publishing to relays...</strong>
+                  <br />
+                  Update is syncing to Nostr relays. This may take a few moments.
+                </>
+              ) : (
+                <>
+                  <strong>Success!</strong>
+                  <br />
+                  {labels.summary}
+                </>
+              )}
+            </AlertDescription>
+          </Alert>
+
+          <div className="bg-muted p-4 rounded-lg">
+            <h4 className="font-medium mb-2">Task Summary</h4>
+            <div className="space-y-1 text-sm">
+              <p><strong>Task:</strong> {task.content.title}</p>
+              <p><strong>Amount:</strong> {formatSats(task.amount)}</p>
+            </div>
+          </div>
+
+          {operationState.status === 'complete' && (
+            <Button onClick={() => {
+              invalidateAllCatallaxQueries();
+              window.location.reload();
+            }} className="w-full">
+              Done
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (showConclusionForm || showDebugConclusionForm) {
     return (
       <div className="space-y-4">
@@ -657,7 +775,7 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
                 <ContributorsList goalId={task.goalId} />
                 {goalData?.progress.isGoalMet && (
                   <Button
-                    onClick={() => updateTaskStatus('funded')}
+                    onClick={() => updateTaskStatus('funded', undefined, undefined, 'crowdfund-marking')}
                     disabled={isPending}
                     className="w-full"
                   >
