@@ -8,7 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CheckCircle, Loader2 } from 'lucide-react';
 import { CATALLAX_KINDS, type ResolutionType, type TaskProposal } from '@/lib/catallax';
 
 interface TaskConclusionFormProps {
@@ -28,6 +30,8 @@ export function TaskConclusionForm({ task, onSuccess, payoutZapReceiptId }: Task
     resolution: '' as ResolutionType | '',
     payoutZapReceiptId: payoutZapReceiptId || '',
   });
+  const [conclusionState, setConclusionState] = useState<'idle' | 'syncing' | 'complete'>('idle');
+  const [completedResolution, setCompletedResolution] = useState<ResolutionType | ''>('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,25 +125,30 @@ export function TaskConclusionForm({ task, onSuccess, payoutZapReceiptId }: Task
             console.log('✅ Task proposal updated to concluded successfully:', taskEvent);
             console.log('✅ Both conclusion event AND task status update completed!');
 
+            // Show syncing state
+            setCompletedResolution(formData.resolution as ResolutionType);
+            setConclusionState('syncing');
+
             toast({
               title: 'Task Concluded!',
               description: `Task has been concluded with resolution: ${formData.resolution}`,
             });
 
-            // Clear form and invalidate queries
-            setFormData({
-              resolutionDetails: '',
-              resolution: '',
-              payoutZapReceiptId: '',
-            });
-
             // Force immediate refetch of all task queries
             queryClient.invalidateQueries({ queryKey: ['catallax'] });
 
-            // Add a small delay to allow queries to refetch, then call onSuccess
+            // Wait longer to allow relays to sync, then show complete state
+            setTimeout(() => {
+              setConclusionState('complete');
+
+              // Invalidate again to catch any delayed updates
+              queryClient.invalidateQueries({ queryKey: ['catallax'] });
+            }, 3000);
+
+            // Final callback after giving user time to see success
             setTimeout(() => {
               onSuccess?.();
-            }, 1500);
+            }, 5000);
           },
           onError: (error) => {
             console.error('❌ Failed to update task proposal status:', error);
@@ -182,6 +191,68 @@ export function TaskConclusionForm({ task, onSuccess, payoutZapReceiptId }: Task
           <p className="text-muted-foreground">
             Only the arbiter or patron can conclude this task.
           </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Show success/syncing state after conclusion is posted
+  if (conclusionState !== 'idle') {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {conclusionState === 'syncing' ? (
+              <Loader2 className="h-5 w-5 animate-spin text-yellow-600" />
+            ) : (
+              <CheckCircle className="h-5 w-5 text-green-600" />
+            )}
+            {conclusionState === 'syncing' ? 'Syncing...' : 'Task Concluded!'}
+          </CardTitle>
+          <CardDescription>
+            {task.content.title}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Alert className={conclusionState === 'syncing'
+            ? "border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950"
+            : "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950"
+          }>
+            {conclusionState === 'syncing' ? (
+              <Loader2 className="h-4 w-4 animate-spin text-yellow-600" />
+            ) : (
+              <CheckCircle className="h-4 w-4 text-green-600" />
+            )}
+            <AlertDescription className={conclusionState === 'syncing'
+              ? "text-yellow-800 dark:text-yellow-200"
+              : "text-green-800 dark:text-green-200"
+            }>
+              {conclusionState === 'syncing' ? (
+                <>
+                  <strong>Publishing to relays...</strong>
+                  <br />
+                  Task conclusion has been signed and is syncing to Nostr relays. This may take a few moments.
+                </>
+              ) : (
+                <>
+                  <strong>Success!</strong>
+                  <br />
+                  Task has been concluded with resolution: <em>{completedResolution}</em>
+                  <br /><br />
+                  Returning to task view...
+                </>
+              )}
+            </AlertDescription>
+          </Alert>
+
+          <div className="bg-muted p-4 rounded-lg">
+            <h4 className="font-medium mb-2">Conclusion Summary</h4>
+            <div className="space-y-1 text-sm">
+              <p><strong>Task:</strong> {task.content.title}</p>
+              <p><strong>Resolution:</strong> {completedResolution}</p>
+              <p><strong>Amount:</strong> {parseInt(task.amount).toLocaleString()} sats</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     );

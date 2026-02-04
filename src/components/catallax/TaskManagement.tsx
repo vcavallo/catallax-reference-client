@@ -673,6 +673,38 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
                 </AlertDescription>
               </Alert>
             )}
+
+            {/* Cancel Task - proposed status (no funds escrowed, patron can cancel directly) */}
+            {task.status === 'proposed' && (
+              <div className="space-y-3 pt-4 border-t">
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Cancel Task:</strong> If you no longer need this task, you can cancel it. No funds have been escrowed yet.
+                  </AlertDescription>
+                </Alert>
+                <Button
+                  onClick={() => updateTaskStatus('concluded')}
+                  disabled={isPending}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Cancel Task
+                </Button>
+              </div>
+            )}
+
+            {/* Cancel Task - funded status (funds escrowed, need arbiter to refund) */}
+            {task.status === 'funded' && !task.workerPubkey && (
+              <div className="space-y-3 pt-4 border-t">
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Need to Cancel?</strong> Since funds are already escrowed with the arbiter, you'll need to contact them to request a cancellation and refund.
+                  </AlertDescription>
+                </Alert>
+              </div>
+            )}
           </div>
         )}
 
@@ -783,7 +815,7 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
         )}
 
         {/* Arbiter/Patron Conclusion Actions */}
-        {(isArbiter || isPatron) && ['submitted', 'in_progress'].includes(task.status) && (
+        {(isArbiter || isPatron) && ['proposed', 'funded', 'submitted', 'in_progress'].includes(task.status) && (
           <div className="space-y-4">
             <Separator />
             <div>
