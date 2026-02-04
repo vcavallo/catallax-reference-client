@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNostr } from '@nostrify/react';
+import { nip19 } from 'nostr-tools';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useNostrPublish } from '@/hooks/useNostrPublish';
 import { useToast } from '@/hooks/useToast';
@@ -324,11 +325,36 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
   const handleAssignWorker = () => {
     if (!workerPubkey) return;
 
+    let hexPubkey = workerPubkey.trim();
+
+    // Check if it's an npub and decode it
+    if (hexPubkey.startsWith('npub1')) {
+      try {
+        const decoded = nip19.decode(hexPubkey);
+        if (decoded.type !== 'npub') {
+          toast({
+            title: 'Invalid npub',
+            description: 'The provided npub could not be decoded.',
+            variant: 'destructive',
+          });
+          return;
+        }
+        hexPubkey = decoded.data;
+      } catch {
+        toast({
+          title: 'Invalid npub',
+          description: 'The provided npub is malformed.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     // Validate pubkey format (basic hex check)
-    if (!/^[0-9a-fA-F]{64}$/.test(workerPubkey)) {
+    if (!/^[0-9a-fA-F]{64}$/.test(hexPubkey)) {
       toast({
         title: 'Invalid Public Key',
-        description: 'Please enter a valid 64-character hex public key.',
+        description: 'Please enter a valid 64-character hex public key or npub.',
         variant: 'destructive',
       });
       return;
@@ -350,7 +376,7 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
       newStatus = task.status;
     }
 
-    updateTaskStatus(newStatus, undefined, workerPubkey);
+    updateTaskStatus(newStatus, undefined, hexPubkey);
   };
 
   const handleRemoveWorker = () => {
@@ -722,7 +748,7 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
                       id="workerPubkey"
                       value={workerPubkey}
                       onChange={(e) => setWorkerPubkey(e.target.value)}
-                      placeholder={task.workerPubkey || "Worker's public key (hex)"}
+                      placeholder={task.workerPubkey || "Worker's public key (hex or npub)"}
                     />
                     <Button
                       onClick={handleAssignWorker}
