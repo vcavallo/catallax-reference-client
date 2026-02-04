@@ -80,7 +80,12 @@ export function TaskFilters({ tasks, filters, onFiltersChange, userFollows, isLo
         {/* Status filter */}
         <Select
           value={filters.status}
-          onValueChange={(value) => onFiltersChange({ ...filters, status: value as TaskStatus | 'all' })}
+          onValueChange={(value) => {
+            const newStatus = value as TaskStatus | 'all';
+            // Turn off "hide concluded" when explicitly selecting concluded status
+            const hideConcluded = newStatus === 'concluded' ? false : filters.hideConcluded;
+            onFiltersChange({ ...filters, status: newStatus, hideConcluded });
+          }}
         >
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="Status" />
