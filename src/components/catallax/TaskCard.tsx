@@ -210,7 +210,7 @@ export function TaskCard({ task, onApply, onManage, onFund, showApplyButton, sho
             </Button>
           )}
 
-          {showFundButton && onFund && task.status === 'proposed' && task.arbiterPubkey && user && task.fundingType !== 'crowdfunding' && (
+          {showFundButton && onFund && task.status === 'proposed' && task.arbiterPubkey && user && user.pubkey === task.patronPubkey && task.fundingType !== 'crowdfunding' && (
             <Button size="sm" onClick={() => setShowFundDialog(true)} className="ml-auto">
               <Zap className="h-4 w-4 mr-1" />
               Fund
