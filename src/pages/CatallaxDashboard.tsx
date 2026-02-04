@@ -80,8 +80,8 @@ export default function CatallaxDashboard() {
 
   // Apply filters to tasks
   const filteredTasks = useMemo(() =>
-    applyTaskFilters(allTasks, taskFilters, userFollows),
-    [allTasks, taskFilters, userFollows]
+    applyTaskFilters(allTasks, taskFilters, userFollows, user?.pubkey),
+    [allTasks, taskFilters, userFollows, user?.pubkey]
   );
 
   // Apply filters to arbiters

@@ -200,7 +200,8 @@ export function TaskFilters({ tasks, filters, onFiltersChange, userFollows, isLo
 export function applyTaskFilters(
   tasks: TaskProposal[],
   filters: TaskFilterState,
-  userFollows?: string[]
+  userFollows?: string[],
+  currentUserPubkey?: string
 ): TaskProposal[] {
   let filtered = [...tasks];
 
@@ -226,9 +227,11 @@ export function applyTaskFilters(
     );
   }
 
-  // Filter by following
+  // Filter by following (always include own tasks)
   if (filters.onlyFollowing && userFollows && userFollows.length > 0) {
-    filtered = filtered.filter(task => userFollows.includes(task.patronPubkey));
+    filtered = filtered.filter(task =>
+      userFollows.includes(task.patronPubkey) || task.patronPubkey === currentUserPubkey
+    );
   }
 
   // Sort
