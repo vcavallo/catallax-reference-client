@@ -12,13 +12,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Zap, AlertTriangle, CheckCircle, Wallet, QrCode, Copy, ExternalLink } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Zap, AlertTriangle, CheckCircle, Copy, Loader2, ChevronDown } from 'lucide-react';
 import { genUserName } from '@/lib/genUserName';
 import { formatSats } from '@/lib/catallax';
 import QRCode from 'qrcode';
-import type { WebLNProvider } from '@webbtc/webln-types';
 
 interface LightningPaymentDialogProps {
   open: boolean;
@@ -58,23 +56,13 @@ export function LightningPaymentDialog({
   const [isProcessing, setIsProcessing] = useState(false);
   const [invoice, setInvoice] = useState('');
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'webln' | 'qr'>('webln');
   const [_zapRequestEvent, setZapRequestEvent] = useState<unknown>(null);
   const [detectionInterval, setDetectionInterval] = useState<NodeJS.Timeout | null>(null);
+  const [isWatchingPayment, setIsWatchingPayment] = useState(false);
 
   const displayName = metadata?.name ?? genUserName(recipientPubkey);
   const profileImage = metadata?.picture;
   const lightningAddress = getLightningAddressFromMetadata(metadata);
-
-  const webln = (window as unknown as { webln?: WebLNProvider }).webln;
-  const isWebLNAvailable = !!webln;
-
-  // Auto-select QR if WebLN not available
-  useEffect(() => {
-    if (!isWebLNAvailable) {
-      setPaymentMethod('qr');
-    }
-  }, [isWebLNAvailable]);
 
   // Cleanup detection interval when dialog closes
   useEffect(() => {
@@ -215,8 +203,12 @@ export function LightningPaymentDialog({
 
       toast({
         title: 'Invoice Generated',
-        description: 'Lightning invoice ready for payment',
+        description: 'Watching for payment...',
       });
+
+      // Auto-start payment detection after invoice is generated
+      setIsProcessing(false);
+      startPaymentDetectionInternal(invoiceData.pr);
 
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to generate invoice';
@@ -226,35 +218,6 @@ export function LightningPaymentDialog({
         variant: 'destructive',
       });
       onPaymentError?.(message);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const payWithWebLN = async () => {
-    if (!webln || !invoice) return;
-
-    setIsProcessing(true);
-
-    try {
-      await webln.enable();
-      const paymentResult = await webln.sendPayment(invoice);
-
-      if (!paymentResult.preimage) {
-        throw new Error('Payment completed but no preimage received');
-      }
-
-      await handlePaymentSuccess(paymentResult.preimage);
-
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'WebLN payment failed';
-      toast({
-        title: 'Payment Failed',
-        description: message,
-        variant: 'destructive',
-      });
-      onPaymentError?.(message);
-    } finally {
       setIsProcessing(false);
     }
   };
@@ -365,113 +328,86 @@ export function LightningPaymentDialog({
     });
   };
 
-  const openInWallet = () => {
-    window.open(`lightning:${invoice}`, '_blank');
-  };
+  // Internal function that accepts invoice parameter (used during auto-start)
+  const startPaymentDetectionInternal = async (invoiceToWatch: string) => {
+    if (!invoiceToWatch) return;
 
-  const startPaymentDetection = async () => {
-    if (!invoice) return;
+    setIsWatchingPayment(true);
 
-    setIsProcessing(true);
+    const startTime = Math.floor(Date.now() / 1000);
+    let checkCount = 0;
+    const maxChecks = 60; // Check for 2 minutes (every 2 seconds)
 
-    try {
-      toast({
-        title: 'Watching for Payment...',
-        description: 'Listening for zap receipt on Nostr relays',
-      });
+    // Create an interval to check for new zap receipts
+    const checkInterval = setInterval(async () => {
+      checkCount++;
 
-      const startTime = Math.floor(Date.now() / 1000);
-      let checkCount = 0;
-      const maxChecks = 60; // Check for 2 minutes (every 2 seconds)
-
-      // Create an interval to check for new zap receipts
-      const checkInterval = setInterval(async () => {
-        checkCount++;
-
-        try {
-          // Query for recent zap receipts
-          const events = await nostr.query([
-            {
-              kinds: [9735], // Zap receipt events
-              '#p': [recipientPubkey],
-              since: startTime, // Only events since we started watching
-              limit: 10,
-            }
-          ], { signal: AbortSignal.timeout(3000) });
-
-          // Check if any zap receipt matches our invoice
-          const matchingReceipt = events.find(event => {
-            const bolt11Tag = event.tags.find(([name]) => name === 'bolt11');
-            return bolt11Tag && bolt11Tag[1] === invoice;
-          });
-
-          if (matchingReceipt) {
-            clearInterval(checkInterval);
-            setIsProcessing(false);
-
-            toast({
-              title: 'Payment Confirmed!',
-              description: 'Zap receipt received - updating task status',
-            });
-
-            handlePaymentSuccess(matchingReceipt.id);
-            return;
+      try {
+        // Query for recent zap receipts
+        const events = await nostr.query([
+          {
+            kinds: [9735], // Zap receipt events
+            '#p': [recipientPubkey],
+            since: startTime, // Only events since we started watching
+            limit: 10,
           }
+        ], { signal: AbortSignal.timeout(3000) });
 
-          // Also check for very recent zap receipts (fallback for services that don't include bolt11)
-          const recentReceipt = events
-            .filter(event => event.created_at > startTime)
-            .sort((a, b) => b.created_at - a.created_at)[0];
+        // Check if any zap receipt matches our invoice
+        const matchingReceipt = events.find(event => {
+          const bolt11Tag = event.tags.find(([name]) => name === 'bolt11');
+          return bolt11Tag && bolt11Tag[1] === invoiceToWatch;
+        });
 
-          if (recentReceipt && checkCount > 5) { // After 10 seconds, accept recent receipts
-            clearInterval(checkInterval);
-            setIsProcessing(false);
-
-            toast({
-              title: 'Payment Detected!',
-              description: 'Recent zap receipt found - updating task status',
-            });
-
-            handlePaymentSuccess(recentReceipt.id);
-            return;
-          }
-
-          // Progress updates
-          if (checkCount % 15 === 0) { // Every 30 seconds
-            toast({
-              title: 'Still Watching...',
-              description: `Checking for payment confirmation (${checkCount * 2}s)`,
-            });
-          }
-
-        } catch (error) {
-          console.warn('Error checking for zap receipts:', error);
-        }
-
-        // Timeout after 2 minutes
-        if (checkCount >= maxChecks) {
+        if (matchingReceipt) {
           clearInterval(checkInterval);
-          setIsProcessing(false);
+          setIsWatchingPayment(false);
 
           toast({
-            title: 'Payment Detection Timeout',
-            description: 'No zap receipt received. Payment may still be processing or you can manually confirm.',
-            variant: 'destructive',
+            title: 'Payment Confirmed!',
+            description: 'Zap receipt received - updating task status',
           });
+
+          handlePaymentSuccess(matchingReceipt.id);
+          return;
         }
-      }, 2000); // Check every 2 seconds
 
-      setDetectionInterval(checkInterval);
+        // Also check for very recent zap receipts (fallback for services that don't include bolt11)
+        const recentReceipt = events
+          .filter(event => event.created_at > startTime)
+          .sort((a, b) => b.created_at - a.created_at)[0];
 
-    } catch (error) {
-      setIsProcessing(false);
-      const message = error instanceof Error ? error.message : 'Payment detection failed';
-      toast({
-        title: 'Detection Error',
-        description: message,
-        variant: 'destructive',
-      });
-    }
+        if (recentReceipt && checkCount > 5) { // After 10 seconds, accept recent receipts
+          clearInterval(checkInterval);
+          setIsWatchingPayment(false);
+
+          toast({
+            title: 'Payment Detected!',
+            description: 'Recent zap receipt found - updating task status',
+          });
+
+          handlePaymentSuccess(recentReceipt.id);
+          return;
+        }
+
+      } catch (error) {
+        console.warn('Error checking for zap receipts:', error);
+      }
+
+      // Timeout after 2 minutes
+      if (checkCount >= maxChecks) {
+        clearInterval(checkInterval);
+        setIsWatchingPayment(false);
+
+        toast({
+          title: 'Payment Detection Timeout',
+          description: 'No zap receipt received. You can manually confirm if payment was sent.',
+          variant: 'destructive',
+        });
+      }
+    }, 2000); // Check every 2 seconds
+
+    setDetectionInterval(checkInterval);
   };
 
   return (
@@ -552,114 +488,62 @@ export function LightningPaymentDialog({
             </>
           )}
 
-          {/* Payment Methods */}
+          {/* Payment QR Code */}
           {invoice && !paymentComplete && (
-            <Tabs value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as 'webln' | 'qr')}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="webln" disabled={!isWebLNAvailable}>
-                  <Wallet className="h-4 w-4 mr-2" />
-                  WebLN
-                </TabsTrigger>
-                <TabsTrigger value="qr">
-                  <QrCode className="h-4 w-4 mr-2" />
-                  QR Code
-                </TabsTrigger>
-              </TabsList>
+            <div className="space-y-4">
+              {qrCodeDataUrl && (
+                <div className="flex justify-center">
+                  <img src={qrCodeDataUrl} alt="Lightning Invoice QR Code" className="rounded-lg" />
+                </div>
+              )}
 
-              <TabsContent value="webln" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Pay with WebLN</CardTitle>
-                    <CardDescription>
-                      Use your browser Lightning wallet extension
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {!isWebLNAvailable ? (
-                      <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
-                        <AlertTriangle className="h-4 w-4 text-orange-600" />
-                        <AlertDescription>
-                          WebLN wallet extension not found. Install Alby, Mutiny, or similar.
-                        </AlertDescription>
-                      </Alert>
-                    ) : (
-                      <Button
-                        onClick={payWithWebLN}
-                        disabled={isProcessing}
-                        className="w-full"
-                      >
-                        {isProcessing ? 'Processing Payment...' : `Pay ${formatSats(parseInt(customAmount))}`}
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
+              {/* Watching for payment indicator */}
+              {isWatchingPayment && (
+                <div className="flex items-center justify-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                  <Loader2 className="h-4 w-4 animate-spin text-yellow-600" />
+                  <span className="text-sm text-yellow-800 dark:text-yellow-200">Watching for payment...</span>
+                </div>
+              )}
 
-              <TabsContent value="qr" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Scan QR Code</CardTitle>
-                    <CardDescription>
-                      Use any Lightning wallet to scan and pay
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {qrCodeDataUrl && (
-                      <div className="flex justify-center">
-                        <img src={qrCodeDataUrl} alt="Lightning Invoice QR Code" className="rounded-lg" />
-                      </div>
-                    )}
+              <div className="space-y-2">
+                <Label>Lightning Invoice</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={invoice}
+                    readOnly
+                    className="font-mono text-xs"
+                  />
+                  <Button variant="outline" size="sm" onClick={copyInvoice}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
 
-                    <div className="space-y-2">
-                      <Label>Lightning Invoice</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          value={invoice}
-                          readOnly
-                          className="font-mono text-xs"
-                        />
-                        <Button variant="outline" size="sm" onClick={copyInvoice}>
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <Button variant="outline" onClick={openInWallet} className="flex-1">
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          Open in Wallet
-                        </Button>
-                        <Button
-                          onClick={() => startPaymentDetection()}
-                          disabled={isProcessing}
-                          className="flex-1"
-                        >
-                          {isProcessing ? 'Watching for Payment...' : 'Pay & Auto-Detect'}
-                        </Button>
-                      </div>
-
-                      {isProcessing && (
-                        <Button
-                          variant="outline"
-                          onClick={() => handlePaymentSuccess()}
-                          className="w-full"
-                        >
-                          I Paid - Confirm Manually
-                        </Button>
-                      )}
-                    </div>
-
-                    <Alert>
-                      <AlertTriangle className="h-4 w-4" />
-                      <AlertDescription>
-                        Click "Pay & Auto-Detect" to automatically watch for payment confirmation on Nostr relays.
-                      </AlertDescription>
-                    </Alert>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
+              {/* Manual override (hidden behind collapsible) */}
+              <Collapsible>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-full text-muted-foreground">
+                    <ChevronDown className="h-4 w-4 mr-2" />
+                    Manual Override
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-2 space-y-2">
+                  <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+                    <AlertTriangle className="h-4 w-4 text-orange-600" />
+                    <AlertDescription className="text-orange-800 dark:text-orange-200 text-xs">
+                      Use this feature if you paid out of band and need to progress the status of the task <em>without a zap receipt</em>. Only do this if you know what you're doing.
+                    </AlertDescription>
+                  </Alert>
+                  <Button
+                    variant="outline"
+                    onClick={() => handlePaymentSuccess()}
+                    className="w-full"
+                  >
+                    Paid out of Band!
+                  </Button>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
           )}
 
           {/* Success State */}
