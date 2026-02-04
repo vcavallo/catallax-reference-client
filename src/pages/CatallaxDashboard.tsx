@@ -4,7 +4,6 @@ import { Helmet } from 'react-helmet-async';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useNostrPublish } from '@/hooks/useNostrPublish';
 import { useToast } from '@/hooks/useToast';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useUserFollows } from '@/hooks/useUserFollows';
 import {
   useArbiterAnnouncements,
@@ -23,7 +22,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RelaySelector } from '@/components/RelaySelector';
 import { ArbiterCard } from '@/components/catallax/ArbiterCard';
 import { TaskCard } from '@/components/catallax/TaskCard';
@@ -31,10 +29,9 @@ import { ConclusionCard } from '@/components/catallax/ConclusionCard';
 import { ArbiterAnnouncementForm } from '@/components/catallax/ArbiterAnnouncementForm';
 import { TaskProposalForm } from '@/components/catallax/TaskProposalForm';
 import { TaskManagement } from '@/components/catallax/TaskManagement';
-import { ZapModeToggle } from '@/components/catallax/ZapModeToggle';
 import { TaskFilters, applyTaskFilters, type TaskFilterState } from '@/components/catallax/TaskFilters';
 import { ArbiterFilters, applyArbiterFilters, type ArbiterFilterState } from '@/components/catallax/ArbiterFilters';
-import { Plus, Shield, Briefcase, CheckCircle, User, Search, AlertTriangle, Settings, Zap, Info } from 'lucide-react';
+import { Plus, Shield, Briefcase, CheckCircle, User, Search, Settings, Info } from 'lucide-react';
 import { CATALLAX_KINDS, type TaskProposal } from '@/lib/catallax';
 
 export default function CatallaxDashboard() {
@@ -64,7 +61,6 @@ export default function CatallaxDashboard() {
   const arbiterExperience = useArbiterExperience();
 
   // Filter states
-  const [realZapsEnabled, setRealZapsEnabled] = useLocalStorage('catallax-real-zaps-enabled', false);
   const [discoverSubTab, setDiscoverSubTab] = useState<'tasks' | 'arbiters'>('tasks');
 
   // Task filter state
@@ -169,7 +165,7 @@ export default function CatallaxDashboard() {
         </div>
         <TaskManagement
           task={selectedTask}
-          realZapsEnabled={realZapsEnabled}
+          realZapsEnabled={true}
           onUpdate={() => {
             setSelectedTask(null);
             setActiveTab('dashboard');
@@ -231,27 +227,6 @@ export default function CatallaxDashboard() {
             <LoginArea className="max-w-60" />
           </div>
         </div>
-
-        {/* Demo Warning */}
-        {!realZapsEnabled && (
-          <Alert className="mb-6 border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
-            <AlertTriangle className="h-4 w-4 text-orange-600" />
-            <AlertDescription className="text-orange-800 dark:text-orange-200">
-              <strong>⚠️ DEMO MODE:</strong> Lightning payments are currently simulated.
-              Go to Settings to enable real Lightning payments with WebLN.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {realZapsEnabled && (
-          <Alert className="mb-6 border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950">
-            <Zap className="h-4 w-4 text-yellow-600" />
-            <AlertDescription className="text-yellow-800 dark:text-yellow-200">
-              <strong>⚡ REAL LIGHTNING MODE:</strong> Payments will send actual Bitcoin.
-              Make sure you have a WebLN wallet extension installed.
-            </AlertDescription>
-          </Alert>
-        )}
 
         {user && (
           <div className="flex gap-2">
@@ -350,7 +325,7 @@ export default function CatallaxDashboard() {
                           task={task}
                           showApplyButton={task.status === 'funded' && !task.workerPubkey && user?.pubkey !== task.patronPubkey}
                           showFundButton={task.status === 'proposed' && !!user && !!task.arbiterPubkey}
-                          realZapsEnabled={realZapsEnabled}
+                          realZapsEnabled={true}
                           onApply={(task) => {
                             alert(`To apply for "${task.content.title}", contact the patron out-of-band. Task ID: ${task.d}`);
                           }}
@@ -506,7 +481,7 @@ export default function CatallaxDashboard() {
                           task={task}
                           showManageButton
                           showFundButton
-                          realZapsEnabled={realZapsEnabled}
+                          realZapsEnabled={true}
                           onManage={handleTaskManage}
                           onFund={handleTaskFund}
                         />
@@ -629,10 +604,17 @@ export default function CatallaxDashboard() {
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-6">
-          <ZapModeToggle
-            realZapsEnabled={realZapsEnabled}
-            onToggle={setRealZapsEnabled}
-          />
+          <Card>
+            <CardHeader>
+              <CardTitle>Settings</CardTitle>
+              <CardDescription>Application settings</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Lightning payments are always enabled. All transactions use real Bitcoin via Lightning Network.
+              </p>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

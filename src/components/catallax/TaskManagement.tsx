@@ -17,8 +17,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Zap, Bitcoin, RefreshCw, Bug, AlertTriangle } from 'lucide-react';
 import { CATALLAX_KINDS, formatSats, getStatusColor, calculatePaymentSplit, calculateCrowdfundingRefunds, calculateArbiterFee, parseArbiterAnnouncement, type TaskProposal, type TaskStatus, type ArbiterAnnouncement, type PaymentSplit } from '@/lib/catallax';
 import { TaskConclusionForm } from './TaskConclusionForm';
-import { ZapDialog } from './ZapDialog';
-import { ZapSplitDialog } from './ZapSplitDialog';
 import { LightningPaymentDialog } from './LightningPaymentDialog';
 import { LightningSplitPaymentDialog } from './LightningSplitPaymentDialog';
 import { GoalProgressBar } from './GoalProgressBar';
@@ -28,10 +26,11 @@ import { useZapGoal } from '@/hooks/useZapGoal';
 interface TaskManagementProps {
   task: TaskProposal;
   onUpdate?: () => void;
+  /** @deprecated Real zaps are always enabled */
   realZapsEnabled?: boolean;
 }
 
-export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: TaskManagementProps) {
+export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
   const { user } = useCurrentUser();
   const { nostr } = useNostr();
   const { mutate: createEvent, isPending } = useNostrPublish();
@@ -829,116 +828,61 @@ export function TaskManagement({ task, onUpdate, realZapsEnabled = false }: Task
         </div>
       </CardContent>
 
-      {/* Zap Split Dialogs */}
+      {/* Split Payment Dialogs */}
       {task.workerPubkey && arbiterAnnouncement && (
-        realZapsEnabled ? (
-          <LightningSplitPaymentDialog
-            open={showPayoutSplitDialog}
-            onOpenChange={setShowPayoutSplitDialog}
-            splits={calculatePaymentSplit(task, arbiterAnnouncement, task.workerPubkey, 'worker')}
-            purpose={`Payment for completed work: ${task.content.title}`}
-            onPaymentComplete={handlePayWorker}
-          />
-        ) : (
-          <ZapSplitDialog
-            open={showPayoutSplitDialog}
-            onOpenChange={setShowPayoutSplitDialog}
-            splits={calculatePaymentSplit(task, arbiterAnnouncement, task.workerPubkey, 'worker')}
-            purpose={`Payment for completed work: ${task.content.title}`}
-            onZapComplete={handlePayWorker}
-            realZapsEnabled={realZapsEnabled}
-          />
-        )
+        <LightningSplitPaymentDialog
+          open={showPayoutSplitDialog}
+          onOpenChange={setShowPayoutSplitDialog}
+          splits={calculatePaymentSplit(task, arbiterAnnouncement, task.workerPubkey, 'worker')}
+          purpose={`Payment for completed work: ${task.content.title}`}
+          onPaymentComplete={handlePayWorker}
+        />
       )}
 
       {arbiterAnnouncement && refundSplits.length > 0 && (
-        realZapsEnabled ? (
-          <LightningSplitPaymentDialog
-            open={showRefundSplitDialog}
-            onOpenChange={setShowRefundSplitDialog}
-            splits={refundSplits}
-            purpose={`Refund for task: ${task.content.title}`}
-            onPaymentComplete={handleRefundPatron}
-          />
-        ) : (
-          <ZapSplitDialog
-            open={showRefundSplitDialog}
-            onOpenChange={setShowRefundSplitDialog}
-            splits={refundSplits}
-            purpose={`Refund for task: ${task.content.title}`}
-            onZapComplete={handleRefundPatron}
-            realZapsEnabled={realZapsEnabled}
-          />
-        )
+        <LightningSplitPaymentDialog
+          open={showRefundSplitDialog}
+          onOpenChange={setShowRefundSplitDialog}
+          splits={refundSplits}
+          purpose={`Refund for task: ${task.content.title}`}
+          onPaymentComplete={handleRefundPatron}
+        />
       )}
 
       {/* Payment Dialogs */}
       {task.arbiterPubkey && (
-        realZapsEnabled ? (
-          <LightningPaymentDialog
-            open={showFundDialog}
-            onOpenChange={setShowFundDialog}
-            recipientPubkey={task.arbiterPubkey}
-            amount={parseInt(task.amount)}
-            purpose={`Escrow funding for task: ${task.content.title}`}
-            onPaymentComplete={handleFundEscrow}
-            eventReference={`${CATALLAX_KINDS.TASK_PROPOSAL}:${task.patronPubkey}:${task.d}`}
-          />
-        ) : (
-          <ZapDialog
-            open={showFundDialog}
-            onOpenChange={setShowFundDialog}
-            recipientPubkey={task.arbiterPubkey}
-            amount={parseInt(task.amount)}
-            purpose={`Escrow funding for task: ${task.content.title}`}
-            onZapComplete={handleFundEscrow}
-          />
-        )
+        <LightningPaymentDialog
+          open={showFundDialog}
+          onOpenChange={setShowFundDialog}
+          recipientPubkey={task.arbiterPubkey}
+          amount={parseInt(task.amount)}
+          purpose={`Escrow funding for task: ${task.content.title}`}
+          onPaymentComplete={handleFundEscrow}
+          eventReference={`${CATALLAX_KINDS.TASK_PROPOSAL}:${task.patronPubkey}:${task.d}`}
+        />
       )}
 
       {task.workerPubkey && (
-        realZapsEnabled ? (
-          <LightningPaymentDialog
-            open={showPayoutDialog}
-            onOpenChange={setShowPayoutDialog}
-            recipientPubkey={task.workerPubkey}
-            amount={parseInt(task.amount)}
-            purpose={`Payment for completed work: ${task.content.title}`}
-            onPaymentComplete={handlePayWorker}
-            eventReference={`${CATALLAX_KINDS.TASK_PROPOSAL}:${task.patronPubkey}:${task.d}`}
-          />
-        ) : (
-          <ZapDialog
-            open={showPayoutDialog}
-            onOpenChange={setShowPayoutDialog}
-            recipientPubkey={task.workerPubkey}
-            amount={parseInt(task.amount)}
-            purpose={`Payment for completed work: ${task.content.title}`}
-            onZapComplete={handlePayWorker}
-          />
-        )
-      )}
-
-      {realZapsEnabled ? (
         <LightningPaymentDialog
-          open={showRefundDialog}
-          onOpenChange={setShowRefundDialog}
-          recipientPubkey={task.patronPubkey}
+          open={showPayoutDialog}
+          onOpenChange={setShowPayoutDialog}
+          recipientPubkey={task.workerPubkey}
           amount={parseInt(task.amount)}
-          purpose={`Refund for task: ${task.content.title}`}
-          onPaymentComplete={handleRefundPatron}
+          purpose={`Payment for completed work: ${task.content.title}`}
+          onPaymentComplete={handlePayWorker}
           eventReference={`${CATALLAX_KINDS.TASK_PROPOSAL}:${task.patronPubkey}:${task.d}`}
         />
-      ) : (
-        <ZapDialog
-          open={showRefundDialog}
-          onOpenChange={setShowRefundDialog}
-          recipientPubkey={task.patronPubkey}
-          amount={parseInt(task.amount)}
-          purpose={`Refund for task: ${task.content.title}`}
-          onZapComplete={handleRefundPatron}
-        />
       )}
+
+      <LightningPaymentDialog
+        open={showRefundDialog}
+        onOpenChange={setShowRefundDialog}
+        recipientPubkey={task.patronPubkey}
+        amount={parseInt(task.amount)}
+        purpose={`Refund for task: ${task.content.title}`}
+        onPaymentComplete={handleRefundPatron}
+        eventReference={`${CATALLAX_KINDS.TASK_PROPOSAL}:${task.patronPubkey}:${task.d}`}
+      />
     </Card>
   );
 }

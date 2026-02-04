@@ -3,19 +3,19 @@ import { Button } from '@/components/ui/button';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { Zap } from 'lucide-react';
 import { type TaskProposal } from '@/lib/catallax';
-import { ZapDialog } from './ZapDialog';
 import { LightningPaymentDialog } from './LightningPaymentDialog';
 import { CATALLAX_KINDS } from '@/lib/catallax';
 
 interface CrowdfundButtonProps {
   task: TaskProposal;
+  /** @deprecated Real zaps are always enabled */
   realZapsEnabled?: boolean;
   className?: string;
   /** Called when a payment is successfully completed */
   onPaymentComplete?: () => void;
 }
 
-export function CrowdfundButton({ task, realZapsEnabled = false, className, onPaymentComplete }: CrowdfundButtonProps) {
+export function CrowdfundButton({ task, className, onPaymentComplete }: CrowdfundButtonProps) {
   const { user } = useCurrentUser();
   const [showZapDialog, setShowZapDialog] = useState(false);
 
@@ -40,27 +40,16 @@ export function CrowdfundButton({ task, realZapsEnabled = false, className, onPa
         Contribute
       </Button>
 
-      {realZapsEnabled ? (
-        <LightningPaymentDialog
-          open={showZapDialog}
-          onOpenChange={setShowZapDialog}
-          recipientPubkey={task.arbiterPubkey}
-          amount={parseInt(task.amount)}
-          purpose={`Crowdfunding contribution for: ${task.content.title}`}
-          onPaymentComplete={handlePaymentComplete}
-          eventReference={`${CATALLAX_KINDS.TASK_PROPOSAL}:${task.patronPubkey}:${task.d}`}
-          goalId={task.goalId}
-        />
-      ) : (
-        <ZapDialog
-          open={showZapDialog}
-          onOpenChange={setShowZapDialog}
-          recipientPubkey={task.arbiterPubkey}
-          amount={parseInt(task.amount)}
-          purpose={`Crowdfunding contribution for: ${task.content.title}`}
-          onZapComplete={handlePaymentComplete}
-        />
-      )}
+      <LightningPaymentDialog
+        open={showZapDialog}
+        onOpenChange={setShowZapDialog}
+        recipientPubkey={task.arbiterPubkey}
+        amount={parseInt(task.amount)}
+        purpose={`Crowdfunding contribution for: ${task.content.title}`}
+        onPaymentComplete={handlePaymentComplete}
+        eventReference={`${CATALLAX_KINDS.TASK_PROPOSAL}:${task.patronPubkey}:${task.d}`}
+        goalId={task.goalId}
+      />
     </>
   );
 }

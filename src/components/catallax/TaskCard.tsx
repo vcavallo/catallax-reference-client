@@ -11,7 +11,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ExternalLink, Calendar, User, Zap, Copy, MoreVertical, Eye } from 'lucide-react';
 import { genUserName } from '@/lib/genUserName';
 import { formatSats, getStatusColor, type TaskProposal, CATALLAX_KINDS } from '@/lib/catallax';
-import { ZapDialog } from './ZapDialog';
 import { LightningPaymentDialog } from './LightningPaymentDialog';
 import { GoalProgressBar } from './GoalProgressBar';
 import { CrowdfundButton } from './CrowdfundButton';
@@ -26,10 +25,11 @@ interface TaskCardProps {
   showApplyButton?: boolean;
   showManageButton?: boolean;
   showFundButton?: boolean;
+  /** @deprecated Real zaps are always enabled */
   realZapsEnabled?: boolean;
 }
 
-export function TaskCard({ task, onApply, onManage, onFund, showApplyButton, showManageButton, showFundButton, realZapsEnabled = false }: TaskCardProps) {
+export function TaskCard({ task, onApply, onManage, onFund, showApplyButton, showManageButton, showFundButton }: TaskCardProps) {
   const { user } = useCurrentUser();
   const { toast } = useToast();
   const [showFundDialog, setShowFundDialog] = useState(false);
@@ -220,7 +220,6 @@ export function TaskCard({ task, onApply, onManage, onFund, showApplyButton, sho
           {task.fundingType === 'crowdfunding' && task.status === 'proposed' && (
             <CrowdfundButton
               task={task}
-              realZapsEnabled={realZapsEnabled}
               className="ml-auto"
               onPaymentComplete={() => setWaitingForPayment(true)}
             />
@@ -235,31 +234,17 @@ export function TaskCard({ task, onApply, onManage, onFund, showApplyButton, sho
 
         {/* Fund Dialog */}
         {task.arbiterPubkey && (
-          realZapsEnabled ? (
-            <LightningPaymentDialog
-              open={showFundDialog}
-              onOpenChange={setShowFundDialog}
-              recipientPubkey={task.arbiterPubkey}
-              amount={parseInt(task.amount)}
-              purpose={`Escrow funding for task: ${task.content.title}`}
-              onPaymentComplete={(zapReceiptId) => {
-                onFund?.(task, zapReceiptId);
-                setShowFundDialog(false);
-              }}
-            />
-          ) : (
-            <ZapDialog
-              open={showFundDialog}
-              onOpenChange={setShowFundDialog}
-              recipientPubkey={task.arbiterPubkey}
-              amount={parseInt(task.amount)}
-              purpose={`Escrow funding for task: ${task.content.title}`}
-              onZapComplete={(zapReceiptId) => {
-                onFund?.(task, zapReceiptId);
-                setShowFundDialog(false);
-              }}
-            />
-          )
+          <LightningPaymentDialog
+            open={showFundDialog}
+            onOpenChange={setShowFundDialog}
+            recipientPubkey={task.arbiterPubkey}
+            amount={parseInt(task.amount)}
+            purpose={`Escrow funding for task: ${task.content.title}`}
+            onPaymentComplete={(zapReceiptId: string) => {
+              onFund?.(task, zapReceiptId);
+              setShowFundDialog(false);
+            }}
+          />
         )}
 
         <div className="text-xs text-muted-foreground">
