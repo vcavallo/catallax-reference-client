@@ -84,6 +84,9 @@ export function ArbiterFilters({ filters, onFiltersChange, userFollows, isLogged
       {/* Only following toggle */}
       {isLoggedIn && (
         <div className="flex items-center gap-2 ml-auto">
+          <Label htmlFor="arbiter-only-following" className="text-sm cursor-pointer text-muted-foreground">
+            Global
+          </Label>
           <Switch
             id="arbiter-only-following"
             checked={filters.onlyFollowing}
@@ -92,7 +95,7 @@ export function ArbiterFilters({ filters, onFiltersChange, userFollows, isLogged
           />
           <Label htmlFor="arbiter-only-following" className="flex items-center gap-1 text-sm cursor-pointer">
             <Users className="h-4 w-4" />
-            Only following
+            Only Following
           </Label>
         </div>
       )}
@@ -107,13 +110,16 @@ export function applyArbiterFilters(
   arbiters: ArbiterAnnouncement[],
   filters: ArbiterFilterState,
   userFollows?: string[],
-  experienceMap?: Map<string, number>
+  experienceMap?: Map<string, number>,
+  currentUserPubkey?: string
 ): ArbiterAnnouncement[] {
   let filtered = [...arbiters];
 
-  // Filter by following
+  // Filter by following (always include own services)
   if (filters.onlyFollowing && userFollows && userFollows.length > 0) {
-    filtered = filtered.filter(arbiter => userFollows.includes(arbiter.arbiterPubkey));
+    filtered = filtered.filter(arbiter =>
+      userFollows.includes(arbiter.arbiterPubkey) || arbiter.arbiterPubkey === currentUserPubkey
+    );
   }
 
   // Sort
