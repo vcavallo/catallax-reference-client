@@ -23,6 +23,7 @@ export interface TaskFilterState {
   sortDirection: SortDirection;
   selectedTags: string[];
   onlyFollowing: boolean;
+  hideConcluded: boolean;
 }
 
 interface TaskFiltersProps {
@@ -134,6 +135,18 @@ export function TaskFilters({ tasks, filters, onFiltersChange, userFollows, isLo
           {filters.sortField === 'value' && (filters.sortDirection === 'asc' ? ' / Lowest' : ' / Highest')}
         </Button>
 
+        {/* Hide concluded toggle */}
+        <div className="flex items-center gap-2">
+          <Switch
+            id="hide-concluded"
+            checked={filters.hideConcluded}
+            onCheckedChange={(checked) => onFiltersChange({ ...filters, hideConcluded: checked })}
+          />
+          <Label htmlFor="hide-concluded" className="text-sm cursor-pointer">
+            Hide concluded
+          </Label>
+        </div>
+
         {/* Only following toggle */}
         {isLoggedIn && (
           <div className="flex items-center gap-2 ml-auto">
@@ -194,6 +207,11 @@ export function applyTaskFilters(
   // Filter by status
   if (filters.status !== 'all') {
     filtered = filtered.filter(task => task.status === filters.status);
+  }
+
+  // Hide concluded tasks
+  if (filters.hideConcluded) {
+    filtered = filtered.filter(task => task.status !== 'concluded');
   }
 
   // Filter by funding type

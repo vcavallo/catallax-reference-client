@@ -68,6 +68,7 @@ export default function CatallaxDashboard() {
     sortDirection: 'desc',
     selectedTags: [],
     onlyFollowing: false,
+    hideConcluded: true,
   });
 
   // Arbiter filter state
@@ -339,6 +340,7 @@ export default function CatallaxDashboard() {
                             sortDirection: 'desc',
                             selectedTags: [],
                             onlyFollowing: false,
+                            hideConcluded: true,
                           })}
                         >
                           Reset Filters

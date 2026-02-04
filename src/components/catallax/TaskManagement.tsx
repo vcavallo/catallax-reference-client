@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Zap, Bitcoin, RefreshCw, Bug, AlertTriangle } from 'lucide-react';
+import { Zap, Bitcoin, RefreshCw, Bug, AlertTriangle, Loader2, CheckCircle } from 'lucide-react';
 import { CATALLAX_KINDS, formatSats, getStatusColor, calculatePaymentSplit, calculateCrowdfundingRefunds, calculateArbiterFee, parseArbiterAnnouncement, type TaskProposal, type TaskStatus, type ArbiterAnnouncement, type PaymentSplit } from '@/lib/catallax';
 import { TaskConclusionForm } from './TaskConclusionForm';
 import { LightningPaymentDialog } from './LightningPaymentDialog';
@@ -87,6 +87,7 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
   const [showRefundSplitDialog, setShowRefundSplitDialog] = useState(false);
   const [showPayoutSplitDialog, setShowPayoutSplitDialog] = useState(false);
   const [conclusionZapReceiptId, setConclusionZapReceiptId] = useState('');
+  const [cancelState, setCancelState] = useState<'idle' | 'syncing' | 'complete'>('idle');
 
   if (!user) {
     return (
@@ -402,6 +403,144 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
     setShowDebugConclusionForm(true);
   };
 
+  const handleCancelTask = () => {
+    setCancelState('syncing');
+
+    const content = task.content;
+    const tags: string[][] = [
+      ['d', task.d],
+      ['p', task.patronPubkey],
+      ['amount', task.amount],
+      ['t', 'catallax'],
+      ['status', 'concluded'],
+    ];
+
+    if (task.arbiterPubkey) {
+      tags.push(['p', task.arbiterPubkey]);
+    }
+
+    if (task.arbiterService) {
+      tags.push(['a', task.arbiterService]);
+    }
+
+    if (task.detailsUrl) {
+      tags.push(['r', task.detailsUrl]);
+    }
+
+    // Add task categories
+    task.categories.forEach(category => {
+      if (category !== 'catallax') {
+        tags.push(['t', category]);
+      }
+    });
+
+    // Preserve NIP-75 crowdfunding fields
+    if (task.fundingType === 'crowdfunding') {
+      tags.push(['funding_type', 'crowdfunding']);
+      if (task.goalId) {
+        tags.push(['goal', task.goalId]);
+      }
+    }
+
+    createEvent({
+      kind: CATALLAX_KINDS.TASK_PROPOSAL,
+      content: JSON.stringify(content),
+      tags,
+      created_at: Math.floor(Date.now() / 1000),
+    }, {
+      onSuccess: () => {
+        toast({
+          title: 'Task Cancelled',
+          description: 'Task has been cancelled successfully.',
+        });
+
+        invalidateAllCatallaxQueries();
+
+        // Show complete state after a delay
+        setTimeout(() => {
+          setCancelState('complete');
+        }, 2000);
+      },
+      onError: (error) => {
+        console.error('Failed to cancel task:', error);
+        setCancelState('idle');
+        toast({
+          title: 'Error',
+          description: 'Failed to cancel task. Please try again.',
+          variant: 'destructive',
+        });
+      },
+    });
+  };
+
+  // Show cancel syncing/complete state
+  if (cancelState !== 'idle') {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {cancelState === 'syncing' ? (
+              <Loader2 className="h-5 w-5 animate-spin text-yellow-600" />
+            ) : (
+              <CheckCircle className="h-5 w-5 text-green-600" />
+            )}
+            {cancelState === 'syncing' ? 'Cancelling...' : 'Task Cancelled'}
+          </CardTitle>
+          <CardDescription>
+            {task.content.title}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Alert className={cancelState === 'syncing'
+            ? "border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950"
+            : "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950"
+          }>
+            {cancelState === 'syncing' ? (
+              <Loader2 className="h-4 w-4 animate-spin text-yellow-600" />
+            ) : (
+              <CheckCircle className="h-4 w-4 text-green-600" />
+            )}
+            <AlertDescription className={cancelState === 'syncing'
+              ? "text-yellow-800 dark:text-yellow-200"
+              : "text-green-800 dark:text-green-200"
+            }>
+              {cancelState === 'syncing' ? (
+                <>
+                  <strong>Publishing to relays...</strong>
+                  <br />
+                  Task cancellation is syncing to Nostr relays. This may take a few moments.
+                </>
+              ) : (
+                <>
+                  <strong>Success!</strong>
+                  <br />
+                  Task has been cancelled. No funds were escrowed.
+                </>
+              )}
+            </AlertDescription>
+          </Alert>
+
+          <div className="bg-muted p-4 rounded-lg">
+            <h4 className="font-medium mb-2">Cancellation Summary</h4>
+            <div className="space-y-1 text-sm">
+              <p><strong>Task:</strong> {task.content.title}</p>
+              <p><strong>Status:</strong> Cancelled (no funds escrowed)</p>
+            </div>
+          </div>
+
+          {cancelState === 'complete' && (
+            <Button onClick={() => {
+              invalidateAllCatallaxQueries();
+              window.location.reload();
+            }} className="w-full">
+              Done
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (showConclusionForm || showDebugConclusionForm) {
     return (
       <div className="space-y-4">
@@ -684,7 +823,7 @@ export function TaskManagement({ task, onUpdate }: TaskManagementProps) {
                   </AlertDescription>
                 </Alert>
                 <Button
-                  onClick={() => updateTaskStatus('concluded')}
+                  onClick={handleCancelTask}
                   disabled={isPending}
                   variant="outline"
                   className="w-full"

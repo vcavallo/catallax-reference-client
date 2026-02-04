@@ -19,7 +19,7 @@ interface TaskConclusionFormProps {
   payoutZapReceiptId?: string;
 }
 
-export function TaskConclusionForm({ task, onSuccess, payoutZapReceiptId }: TaskConclusionFormProps) {
+export function TaskConclusionForm({ task, onSuccess: _onSuccess, payoutZapReceiptId }: TaskConclusionFormProps) {
   const { user } = useCurrentUser();
   const { mutate: createEvent, isPending } = useNostrPublish();
   const { toast } = useToast();
@@ -144,11 +144,6 @@ export function TaskConclusionForm({ task, onSuccess, payoutZapReceiptId }: Task
               // Invalidate again to catch any delayed updates
               queryClient.invalidateQueries({ queryKey: ['catallax'] });
             }, 3000);
-
-            // Final callback after giving user time to see success
-            setTimeout(() => {
-              onSuccess?.();
-            }, 5000);
           },
           onError: (error) => {
             console.error('❌ Failed to update task proposal status:', error);
@@ -238,8 +233,6 @@ export function TaskConclusionForm({ task, onSuccess, payoutZapReceiptId }: Task
                   <strong>Success!</strong>
                   <br />
                   Task has been concluded with resolution: <em>{completedResolution}</em>
-                  <br /><br />
-                  Returning to task view...
                 </>
               )}
             </AlertDescription>
@@ -253,6 +246,15 @@ export function TaskConclusionForm({ task, onSuccess, payoutZapReceiptId }: Task
               <p><strong>Amount:</strong> {parseInt(task.amount).toLocaleString()} sats</p>
             </div>
           </div>
+
+          {conclusionState === 'complete' && (
+            <Button onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ['catallax'] });
+              window.location.reload();
+            }} className="w-full">
+              Done
+            </Button>
+          )}
         </CardContent>
       </Card>
     );
