@@ -8,7 +8,6 @@ import { useUserFollows } from '@/hooks/useUserFollows';
 import {
   useArbiterAnnouncements,
   useTaskProposals,
-  useTaskConclusions,
   useMyArbiterServices,
   useMyTasks,
   useTasksForWorker,
@@ -25,13 +24,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { RelaySelector } from '@/components/RelaySelector';
 import { ArbiterCard } from '@/components/catallax/ArbiterCard';
 import { TaskCard } from '@/components/catallax/TaskCard';
-import { ConclusionCard } from '@/components/catallax/ConclusionCard';
 import { ArbiterAnnouncementForm } from '@/components/catallax/ArbiterAnnouncementForm';
 import { TaskProposalForm } from '@/components/catallax/TaskProposalForm';
 import { TaskManagement } from '@/components/catallax/TaskManagement';
 import { TaskFilters, applyTaskFilters, type TaskFilterState } from '@/components/catallax/TaskFilters';
 import { ArbiterFilters, applyArbiterFilters, type ArbiterFilterState } from '@/components/catallax/ArbiterFilters';
-import { Plus, Shield, Briefcase, CheckCircle, User, Search, Settings, Info } from 'lucide-react';
+import { Plus, Shield, Briefcase, User, Search, Settings, Info } from 'lucide-react';
 import { CATALLAX_KINDS, type TaskProposal } from '@/lib/catallax';
 
 export default function CatallaxDashboard() {
@@ -48,7 +46,6 @@ export default function CatallaxDashboard() {
   // Data queries
   const { data: arbiters = [], isLoading: arbitersLoading } = useArbiterAnnouncements();
   const { data: allTasks = [], isLoading: tasksLoading } = useTaskProposals();
-  const { data: conclusions = [], isLoading: conclusionsLoading } = useTaskConclusions();
 
   // User-specific queries
   const { data: myServices = [] } = useMyArbiterServices(user?.pubkey);
@@ -243,7 +240,7 @@ export default function CatallaxDashboard() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="discover">
             <Search className="h-4 w-4 mr-2" />
             Discover
@@ -255,10 +252,6 @@ export default function CatallaxDashboard() {
           <TabsTrigger value="active">
             <Briefcase className="h-4 w-4 mr-2" />
             Active Tasks
-          </TabsTrigger>
-          <TabsTrigger value="history">
-            <CheckCircle className="h-4 w-4 mr-2" />
-            History
           </TabsTrigger>
           <TabsTrigger value="settings">
             <Settings className="h-4 w-4 mr-2" />
@@ -567,35 +560,6 @@ export default function CatallaxDashboard() {
               ) : (
                 <div className="text-center py-8">
                   <p className="text-muted-foreground">No active tasks found</p>
-                  <RelaySelector className="mt-4" />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="history" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Task Conclusions</CardTitle>
-              <CardDescription>Completed task resolutions and outcomes</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {conclusionsLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[...Array(4)].map((_, i) => (
-                    <Skeleton key={i} className="h-48 w-full" />
-                  ))}
-                </div>
-              ) : conclusions.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {conclusions.map((conclusion) => (
-                    <ConclusionCard key={conclusion.id} conclusion={conclusion} />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">No task conclusions found</p>
                   <RelaySelector className="mt-4" />
                 </div>
               )}
