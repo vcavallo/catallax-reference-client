@@ -67,7 +67,7 @@ export default function CatallaxDashboard() {
     sortField: 'date',
     sortDirection: 'desc',
     selectedTags: [],
-    onlyFollowing: false,
+    onlyFollowing: true,
     hideConcluded: true,
   });
 
@@ -339,7 +339,7 @@ export default function CatallaxDashboard() {
                             sortField: 'date',
                             sortDirection: 'desc',
                             selectedTags: [],
-                            onlyFollowing: false,
+                            onlyFollowing: true,
                             hideConcluded: true,
                           })}
                         >

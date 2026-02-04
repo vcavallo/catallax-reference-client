@@ -150,6 +150,9 @@ export function TaskFilters({ tasks, filters, onFiltersChange, userFollows, isLo
         {/* Only following toggle */}
         {isLoggedIn && (
           <div className="flex items-center gap-2 ml-auto">
+            <Label htmlFor="only-following" className="text-sm cursor-pointer text-muted-foreground">
+              Global
+            </Label>
             <Switch
               id="only-following"
               checked={filters.onlyFollowing}
@@ -158,7 +161,7 @@ export function TaskFilters({ tasks, filters, onFiltersChange, userFollows, isLo
             />
             <Label htmlFor="only-following" className="flex items-center gap-1 text-sm cursor-pointer">
               <Users className="h-4 w-4" />
-              Only following
+              Only Following
             </Label>
           </div>
         )}
