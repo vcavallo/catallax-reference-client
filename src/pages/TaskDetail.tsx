@@ -113,7 +113,7 @@ export function TaskDetail() {
   const pageTitle = task ? `${task.content.title} - Catallax` : (taskAddress ? `Task ${taskAddress.identifier} - Catallax` : 'Task - Catallax');
   const pageDescription = task ? generateMetaDescription(task) : (taskAddress
     ? `View task details and contract work opportunity on Catallax - ${taskAddress.identifier}`
-    : 'A decentralized platform for contract work with escrow arbitration on Nostr');
+    : 'A protocol for decentralized contract work on Nostr');
   const pageUrl = typeof window !== 'undefined' ? window.location.href : '';
   const ogTitle = task ? task.content.title : pageTitle;
 

@@ -4,7 +4,17 @@
       "mcp__nostr__read_nip",
       "Bash(find:*)",
       "mcp__nostr__read_protocol",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(nak decode:*)",
+      "Bash(nak req:*)",
+      "Bash(jq:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node -e:*)",
+      "Bash(for id in 3a3bf13736ed7a19ae71f52941c04e90f3577b6e89346719ec831a0dd73e4686 5755cb633e881abdd561d35d223491feea308104baa28dedf4542f1704fc6835 6d54c148e0aa02f239e3bf70eec2bd5cb7b6b7d4c3a950f31e12cd8607ff975c 873e237d61d59da7df9c709777f3b69b9cc6667fd5f3ce8686aada74939f4fdc)",
+      "Bash(do echo '=== Task: $id ===' nak req -i $id wss://relay.primal.net)",
+      "Bash(npm run test:*)",
+      "WebFetch(domain:catallax.network)",
+      "Bash(curl:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

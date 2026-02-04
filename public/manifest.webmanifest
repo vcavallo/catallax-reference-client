@@ -1,7 +1,7 @@
 {
   "name": "Catallax",
   "short_name": "Catallax",
-  "description": "Decentralized contract work with escrow arbitration on Nostr",
+  "description": "A protocol for decentralized contract work on Nostr",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

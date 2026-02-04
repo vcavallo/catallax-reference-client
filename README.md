@@ -1,6 +1,6 @@
-# Catallax - Decentralized Contract Work Platform
+# Catallax - Decentralized, Uncensorable Gig Work
 
-A comprehensive UI implementation for testing the Catallax protocol (NIP-3400), which enables decentralized contract work with escrow arbitration on Nostr.
+A comprehensive UI implementation for testing the Catallax protocol (NIP-3400), which enables decentralized contract work on Nostr.
 
 ## ⚡ Lightning Integration
 

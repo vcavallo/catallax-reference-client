@@ -203,8 +203,8 @@ export default function CatallaxDashboard() {
   return (
     <>
       <Helmet>
-        <title>Catallax - Decentralized Contract Work</title>
-        <meta name="description" content="A decentralized platform for contract work with escrow arbitration on Nostr" />
+        <title>Catallax - Decentralized Gigs</title>
+        <meta name="description" content="A protocol for decentralized contract work on Nostr" />
       </Helmet>
 
       <div className="container mx-auto px-4 py-8">
@@ -212,7 +212,7 @@ export default function CatallaxDashboard() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-3xl font-bold">Catallax</h1>
-            <p className="text-muted-foreground">Decentralized contract work with escrow arbitration</p>
+            <p className="text-muted-foreground">Decentralized, uncensorable gig work</p>
           </div>
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" asChild>

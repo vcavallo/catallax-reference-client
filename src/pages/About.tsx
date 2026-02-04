@@ -9,8 +9,8 @@ export default function About() {
   return (
     <>
       <Helmet>
-        <title>About Catallax - Decentralized Contract Work</title>
-        <meta name="description" content="Learn about the Catallax protocol for pseudonymous contract work economies on Nostr" />
+        <title>About Catallax - Decentralized Gig Work</title>
+        <meta name="description" content="Learn about the Catallax protocol for pseudonymous contract work on Nostr" />
       </Helmet>
 
       <div className="container mx-auto px-4 py-8 max-w-4xl">
